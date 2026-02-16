@@ -695,7 +695,7 @@ function AircraftViewer3D({ sensors }) {
   const isMobile = useIsMobile();
   
   return (
-    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 340px", gap:isMobile ? 24 : 16 }}>
+    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 340px", gap:isMobile ? 32 : 16 }}>
       {/* Canvas */}
       <div style={{ position:"relative" }}>
         {/* Legend */}
@@ -736,88 +736,88 @@ function AircraftViewer3D({ sensors }) {
         )}
         {/* Mobile legend below canvas */}
         {isMobile && (
-          <div style={{ marginTop:16, display:"flex", justifyContent:"center", gap:16, flexWrap:"wrap" }}>
+          <div style={{ marginTop:24, display:"flex", justifyContent:"center", gap:24, flexWrap:"wrap", padding:"0 8px" }}>
             {[["NOMINAL","#00e5c0"],["WATCH","#f5a623"],["CRITICAL","#ff3b5c"]].map(([lbl,col])=>(
-              <div key={lbl} style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <span style={{ width:12, height:12, borderRadius:"50%", background:col, display:"inline-block", boxShadow:`0 0 8px ${col}` }}/>
-                <span style={{ fontSize:12, color:col, fontFamily:"'DM Mono',monospace", fontWeight:500 }}>{lbl}</span>
+              <div key={lbl} style={{ display:"flex", alignItems:"center", gap:10 }}>
+                <span style={{ width:14, height:14, borderRadius:"50%", background:col, display:"inline-block", boxShadow:`0 0 8px ${col}` }}/>
+                <span style={{ fontSize:14, color:col, fontFamily:"'DM Mono',monospace", fontWeight:500 }}>{lbl}</span>
               </div>
             ))}
           </div>
         )}
         <div ref={mountRef}
-          style={{ width:"100%", height:isMobile ? 350 : 600, borderRadius:isMobile ? 16 : 12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab", touchAction:"none" }}
+          style={{ width:"100%", height:isMobile ? 380 : 600, borderRadius:isMobile ? 20 : 12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab", touchAction:"none" }}
         />
         {isMobile && (
-          <div style={{ marginTop:12, textAlign:"center" }}>
-            <span style={{ fontSize:11, color:"#666", fontFamily:"'DM Mono',monospace" }}>Touch and drag to rotate · Tap sensor for details</span>
+          <div style={{ marginTop:20, textAlign:"center", padding:"0 12px" }}>
+            <span style={{ fontSize:13, color:"#666", fontFamily:"'DM Mono',monospace", lineHeight:1.6 }}>Touch and drag to rotate · Tap sensor for details</span>
           </div>
         )}
       </div>
 
       {/* Right panel */}
-      <div style={{ display:"flex", flexDirection:"column", gap:isMobile ? 20 : 12 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:isMobile ? 28 : 12 }}>
         {selected ? (
-          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${RISK_COLOR(selected.risk)}35`, borderRadius:isMobile ? 16 : 12, padding:isMobile ? 24 : 20, flex:1 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 20 : 14 }}>
-              <div style={{ flex:1 }}>
-                <div style={{ fontSize:isMobile ? 10 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 8 : 5 }}>SELECTED SENSOR</div>
-                <div style={{ fontSize:isMobile ? 18 : 14, fontFamily:"'Outfit',sans-serif", fontWeight:800, color:"#e0e8f0", lineHeight:1.3 }}>{selected.name}</div>
-                <div style={{ fontSize:isMobile ? 12 : 10, color:"#666", marginTop:isMobile ? 6 : 4 }}>{SUBSYSTEM_META[selected.subsystem]?.icon} {SUBSYSTEM_META[selected.subsystem]?.name}</div>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${RISK_COLOR(selected.risk)}35`, borderRadius:isMobile ? 20 : 12, padding:isMobile ? 28 : 20, flex:1 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 24 : 14 }}>
+              <div style={{ flex:1, paddingRight:isMobile ? 12 : 0 }}>
+                <div style={{ fontSize:isMobile ? 12 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 10 : 5 }}>SELECTED SENSOR</div>
+                <div style={{ fontSize:isMobile ? 20 : 14, fontFamily:"'Outfit',sans-serif", fontWeight:800, color:"#e0e8f0", lineHeight:1.4 }}>{selected.name}</div>
+                <div style={{ fontSize:isMobile ? 14 : 10, color:"#666", marginTop:isMobile ? 8 : 4 }}>{SUBSYSTEM_META[selected.subsystem]?.icon} {SUBSYSTEM_META[selected.subsystem]?.name}</div>
               </div>
-              <button onClick={()=>setSelected(null)} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:8, padding:isMobile ? "8px 14px" : "4px 10px", cursor:"pointer", fontSize:isMobile ? 12 : 10, fontFamily:"'DM Mono',monospace", minWidth:isMobile ? 50 : "auto", minHeight:isMobile ? 44 : "auto" }}>✕</button>
+              <button onClick={()=>setSelected(null)} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:10, padding:isMobile ? "10px 16px" : "4px 10px", cursor:"pointer", fontSize:isMobile ? 14 : 10, fontFamily:"'DM Mono',monospace", minWidth:isMobile ? 56 : "auto", minHeight:isMobile ? 48 : "auto" }}>✕</button>
             </div>
             {/* Gauge */}
-            <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 18 : 14, marginBottom:isMobile ? 20 : 16, padding:isMobile ? "16px 18px" : "12px 14px", background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 12 : 8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 22 : 14, marginBottom:isMobile ? 24 : 16, padding:isMobile ? "20px 22px" : "12px 14px", background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 14 : 8 }}>
               <div style={{ position:"relative" }}>
-                <GaugeRing value={selected.risk} size={isMobile ? 80 : 64} stroke={isMobile ? 8 : 6} color={RISK_COLOR(selected.risk)}/>
-                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 13, fontFamily:"'DM Mono',monospace", color:RISK_COLOR(selected.risk), fontWeight:700 }}>{selected.risk}</div>
+                <GaugeRing value={selected.risk} size={isMobile ? 90 : 64} stroke={isMobile ? 9 : 6} color={RISK_COLOR(selected.risk)}/>
+                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 20 : 13, fontFamily:"'DM Mono',monospace", color:RISK_COLOR(selected.risk), fontWeight:700 }}>{selected.risk}</div>
               </div>
               <div>
-                <div style={{ fontSize:isMobile ? 16 : 13, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{RISK_LABEL(selected.risk)}</div>
-                <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", marginTop:isMobile ? 4 : 3 }}>Risk Score / 100</div>
+                <div style={{ fontSize:isMobile ? 18 : 13, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{RISK_LABEL(selected.risk)}</div>
+                <div style={{ fontSize:isMobile ? 13 : 9, color:"#555", marginTop:isMobile ? 6 : 3 }}>Risk Score / 100</div>
                 {!isMobile && (
                   <div style={{ fontSize:9, color:"#444", marginTop:6, fontFamily:"'DM Mono',monospace" }}>XYZ {selected.pos.map(v=>v.toFixed(1)).join(" · ")}</div>
                 )}
               </div>
             </div>
             {/* Readings */}
-            <div style={{ marginBottom:isMobile ? 20 : 14 }}>
-              <div style={{ fontSize:isMobile ? 10 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 14 : 10 }}>LIVE READINGS</div>
+            <div style={{ marginBottom:isMobile ? 24 : 14 }}>
+              <div style={{ fontSize:isMobile ? 12 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 16 : 10 }}>LIVE READINGS</div>
               {selected.signals.map((sig,i)=>{
                 const parts=sig.split(": ");
                 return (
-                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:isMobile ? "12px 14px" : "7px 10px", background:"rgba(0,0,0,0.25)", borderRadius:isMobile ? 8 : 5, marginBottom:isMobile ? 8 : 5 }}>
-                    <span style={{ fontSize:isMobile ? 12 : 10, color:"#888", fontFamily:"'DM Mono',monospace" }}>{parts[0]}</span>
-                    <span style={{ fontSize:isMobile ? 12 : 10, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{parts[1]}</span>
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:isMobile ? "14px 18px" : "7px 10px", background:"rgba(0,0,0,0.25)", borderRadius:isMobile ? 10 : 5, marginBottom:isMobile ? 10 : 5 }}>
+                    <span style={{ fontSize:isMobile ? 14 : 10, color:"#888", fontFamily:"'DM Mono',monospace" }}>{parts[0]}</span>
+                    <span style={{ fontSize:isMobile ? 14 : 10, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{parts[1]}</span>
                   </div>
                 );
               })}
             </div>
             {/* AI note */}
-            <div style={{ background:"rgba(0,229,192,0.04)", border:"1px solid rgba(0,229,192,0.12)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? 18 : 14 }}>
-              <div style={{ fontSize:isMobile ? 10 : 8, color:"#00e5c0", letterSpacing:2, marginBottom:isMobile ? 12 : 8 }}>🤖 AI ANALYSIS</div>
-              <p style={{ fontSize:isMobile ? 12 : 10, color:"#bbb", lineHeight:isMobile ? 1.8 : 1.85 }}>{selected.note}</p>
+            <div style={{ background:"rgba(0,229,192,0.04)", border:"1px solid rgba(0,229,192,0.12)", borderRadius:isMobile ? 14 : 8, padding:isMobile ? 20 : 14 }}>
+              <div style={{ fontSize:isMobile ? 12 : 8, color:"#00e5c0", letterSpacing:2, marginBottom:isMobile ? 14 : 8 }}>🤖 AI ANALYSIS</div>
+              <p style={{ fontSize:isMobile ? 14 : 10, color:"#bbb", lineHeight:isMobile ? 1.9 : 1.85 }}>{selected.note}</p>
             </div>
           </div>
         ) : (
-          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 18, flex:1, overflowY:"auto", maxHeight:isMobile ? "none" : 460 }}>
-            <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 18 : 14 }}>ALL SENSOR NODES — {SENSORS_3D.length} TOTAL</div>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 20 : 12, padding:isMobile ? 24 : 18, flex:1, overflowY:"auto", maxHeight:isMobile ? "none" : 460 }}>
+            <div style={{ fontSize:isMobile ? 13 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 22 : 14 }}>ALL SENSOR NODES — {SENSORS_3D.length} TOTAL</div>
             {SENSORS_3D.map(s=>{
               const rc=RISK_COLOR(s.risk);
               return (
                 <div key={s.id} onClick={()=>setSelected(s)}
-                  style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 10, padding:isMobile ? "14px 16px" : "9px 12px", background:"rgba(0,0,0,0.2)", borderRadius:isMobile ? 10 : 7, marginBottom:isMobile ? 10 : 6, cursor:"pointer", border:`1px solid ${rc}15`, minHeight:isMobile ? 60 : "auto" }}
+                  style={{ display:"flex", alignItems:"center", gap:isMobile ? 14 : 10, padding:isMobile ? "16px 20px" : "9px 12px", background:"rgba(0,0,0,0.2)", borderRadius:isMobile ? 12 : 7, marginBottom:isMobile ? 12 : 6, cursor:"pointer", border:`1px solid ${rc}15`, minHeight:isMobile ? 68 : "auto" }}
                   onMouseEnter={e=>!isMobile && (e.currentTarget.style.background="rgba(0,229,192,0.05)")}
                   onMouseLeave={e=>!isMobile && (e.currentTarget.style.background="rgba(0,0,0,0.2)")}>
-                  <div style={{ width:isMobile ? 12 : 8, height:isMobile ? 12 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 6px ${rc}`, flexShrink:0 }}/>
+                  <div style={{ width:isMobile ? 14 : 8, height:isMobile ? 14 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 6px ${rc}`, flexShrink:0 }}/>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:isMobile ? 13 : 10, color:"#ccc", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontWeight:isMobile ? 500 : 400 }}>{s.name}</div>
-                    <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", marginTop:isMobile ? 4 : 0 }}>{SUBSYSTEM_META[s.subsystem]?.icon} {SUBSYSTEM_META[s.subsystem]?.name}</div>
+                    <div style={{ fontSize:isMobile ? 15 : 10, color:"#ccc", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontWeight:isMobile ? 500 : 400 }}>{s.name}</div>
+                    <div style={{ fontSize:isMobile ? 13 : 9, color:"#555", marginTop:isMobile ? 6 : 0 }}>{SUBSYSTEM_META[s.subsystem]?.icon} {SUBSYSTEM_META[s.subsystem]?.name}</div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0 }}>
-                    <div style={{ fontSize:isMobile ? 14 : 11, color:rc, fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{s.risk}</div>
-                    <div style={{ fontSize:isMobile ? 10 : 8, color:"#444" }}>risk</div>
+                    <div style={{ fontSize:isMobile ? 16 : 11, color:rc, fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{s.risk}</div>
+                    <div style={{ fontSize:isMobile ? 11 : 8, color:"#444" }}>risk</div>
                   </div>
                 </div>
               );
@@ -826,17 +826,17 @@ function AircraftViewer3D({ sensors }) {
         )}
 
         {/* Summary */}
-        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 16 }}>
-          <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 16 : 12 }}>FLEET SENSOR SUMMARY</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 12 : 8 }}>
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 20 : 12, padding:isMobile ? 24 : 16 }}>
+          <div style={{ fontSize:isMobile ? 13 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 20 : 12 }}>FLEET SENSOR SUMMARY</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 14 : 8 }}>
             {[
               { lbl:"NOMINAL",  val:SENSORS_3D.filter(s=>s.risk<30).length,                    col:"#00e5c0" },
               { lbl:"WATCH",    val:SENSORS_3D.filter(s=>s.risk>=30&&s.risk<60).length,         col:"#f5a623" },
               { lbl:"CRITICAL", val:SENSORS_3D.filter(s=>s.risk>=60).length,                    col:"#ff3b5c" },
             ].map(({ lbl,val,col })=>(
-              <div key={lbl} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? "16px 12px" : "10px 8px", textAlign:"center" }}>
-                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:isMobile ? 36 : 28, fontWeight:800, color:col }}>{val}</div>
-                <div style={{ fontSize:isMobile ? 10 : 8, color:col, letterSpacing:1.5, marginTop:isMobile ? 6 : 0 }}>{lbl}</div>
+              <div key={lbl} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 14 : 8, padding:isMobile ? "20px 14px" : "10px 8px", textAlign:"center" }}>
+                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:isMobile ? 40 : 28, fontWeight:800, color:col }}>{val}</div>
+                <div style={{ fontSize:isMobile ? 11 : 8, color:col, letterSpacing:1.5, marginTop:isMobile ? 8 : 0 }}>{lbl}</div>
               </div>
             ))}
           </div>
@@ -999,14 +999,14 @@ function FlightSelectPage({ onSelect, onLogout }) {
       </div>
 
       {/* Main content */}
-      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
-        <div style={{ marginBottom:isMobile ? 32 : 48, textAlign:"center" }}>
-          <div style={{ fontSize:isMobile ? 11 : 10, color:"#00e5c0", letterSpacing:isMobile ? 3 : 4, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 16 : 12 }}>SELECT FLIGHT · OPERATIONAL DASHBOARD</div>
-          <div style={{ fontSize:isMobile ? 32 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0", marginBottom:isMobile ? 12 : 0 }}>Active Fleet Monitor</div>
-          <div style={{ fontSize:isMobile ? 13 : 14, color:"#555", marginTop:isMobile ? 12 : 10, fontWeight:400, padding:isMobile ? "0 20px" : 0 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
+      <div style={{ flex:1, padding:isMobile ? "40px 24px 48px" : "52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+        <div style={{ marginBottom:isMobile ? 40 : 48, textAlign:"center" }}>
+          <div style={{ fontSize:isMobile ? 13 : 10, color:"#00e5c0", letterSpacing:isMobile ? 3 : 4, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 20 : 12 }}>SELECT FLIGHT · OPERATIONAL DASHBOARD</div>
+          <div style={{ fontSize:isMobile ? 36 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0", marginBottom:isMobile ? 16 : 0 }}>Active Fleet Monitor</div>
+          <div style={{ fontSize:isMobile ? 15 : 14, color:"#555", marginTop:isMobile ? 16 : 10, fontWeight:400, padding:isMobile ? "0 24px" : 0, lineHeight:1.6 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(2,1fr)", gap:isMobile ? 24 : 20, maxWidth:1040, margin:"0 auto" }}>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(2,1fr)", gap:isMobile ? 32 : 20, maxWidth:1040, margin:"0 auto" }}>
           {FLIGHT_DETAILS.map((f,i)=>{
             const rc = RISK_COLOR(f.risk);
             const isHov = hovered===f.id;
@@ -1016,7 +1016,7 @@ function FlightSelectPage({ onSelect, onLogout }) {
                 onMouseEnter={()=>setHovered(f.id)}
                 onMouseLeave={()=>setHovered(null)}
                 onClick={()=>!isArrived&&onSelect(f)}
-                style={{ background:isHov&&!isArrived?"rgba(0,229,192,0.04)":"rgba(255,255,255,0.02)", border:`1px solid ${isHov&&!isArrived?rc:"rgba(255,255,255,0.07)"}`, borderRadius:isMobile ? 20 : 16, padding:isMobile ? 24 : 28, cursor:isArrived?"default":"pointer", transition:"all .25s", animation:`fadeIn .4s ease ${i*0.1}s both`, position:"relative", overflow:"hidden" }}>
+                style={{ background:isHov&&!isArrived?"rgba(0,229,192,0.04)":"rgba(255,255,255,0.02)", border:`1px solid ${isHov&&!isArrived?rc:"rgba(255,255,255,0.07)"}`, borderRadius:isMobile ? 24 : 16, padding:isMobile ? 28 : 28, cursor:isArrived?"default":"pointer", transition:"all .25s", animation:`fadeIn .4s ease ${i*0.1}s both`, position:"relative", overflow:"hidden" }}>
                 {/* Top glow bar */}
                 <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${rc},transparent)`, opacity:isHov?0.8:0.3, transition:"opacity .3s" }}/>
                 {/* Progress fill bg */}
@@ -1024,70 +1024,70 @@ function FlightSelectPage({ onSelect, onLogout }) {
 
                 <div style={{ position:"relative" }}>
                   {/* Flight header */}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 24 : 20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 28 : 20 }}>
                     <div>
-                      <div style={{ fontSize:isMobile ? 36 : 32, fontWeight:800, letterSpacing:2, color:"#e0e8f0", lineHeight:1 }}>{f.id}</div>
-                      <div style={{ fontSize:isMobile ? 15 : 14, color:"#666", marginTop:isMobile ? 8 : 6, fontWeight:500 }}>{f.from} → {f.to}</div>
+                      <div style={{ fontSize:isMobile ? 40 : 32, fontWeight:800, letterSpacing:2, color:"#e0e8f0", lineHeight:1 }}>{f.id}</div>
+                      <div style={{ fontSize:isMobile ? 16 : 14, color:"#666", marginTop:isMobile ? 10 : 6, fontWeight:500 }}>{f.from} → {f.to}</div>
                     </div>
                     <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:isMobile ? 10 : 9, background:`${rc}18`, border:`1px solid ${rc}40`, color:rc, padding:isMobile ? "6px 12px" : "4px 10px", borderRadius:isMobile ? 8 : 5, letterSpacing:2, fontFamily:"'DM Mono',monospace", display:"inline-block" }}>
-                        {f.status==="EN ROUTE"&&<span style={{ width:isMobile ? 7 : 6, height:isMobile ? 7 : 6, borderRadius:"50%", background:rc, display:"inline-block", marginRight:5, animation:"pulse 1.4s infinite" }}/>}
+                      <div style={{ fontSize:isMobile ? 11 : 9, background:`${rc}18`, border:`1px solid ${rc}40`, color:rc, padding:isMobile ? "8px 14px" : "4px 10px", borderRadius:isMobile ? 10 : 5, letterSpacing:2, fontFamily:"'DM Mono',monospace", display:"inline-block" }}>
+                        {f.status==="EN ROUTE"&&<span style={{ width:isMobile ? 8 : 6, height:isMobile ? 8 : 6, borderRadius:"50%", background:rc, display:"inline-block", marginRight:6, animation:"pulse 1.4s infinite" }}/>}
                         {f.status}
                       </div>
                     </div>
                   </div>
 
                   {/* Aircraft + route info */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 10 : 12, marginBottom:isMobile ? 24 : 20 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 12 : 12, marginBottom:isMobile ? 28 : 20 }}>
                     {[{l:"AIRCRAFT",v:f.aircraft},{l:"DISTANCE",v:f.distance},{l:"DURATION",v:f.duration}].map(({l,v})=>(
-                      <div key={l} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 10px" : "10px 12px" }}>
-                        <div style={{ fontSize:isMobile ? 9 : 8, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 6 : 4 }}>{l}</div>
-                        <div style={{ fontSize:isMobile ? 13 : 12, color:"#ccc", fontWeight:600 }}>{v}</div>
+                      <div key={l} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? "14px 12px" : "10px 12px" }}>
+                        <div style={{ fontSize:isMobile ? 10 : 8, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 8 : 4 }}>{l}</div>
+                        <div style={{ fontSize:isMobile ? 14 : 12, color:"#ccc", fontWeight:600 }}>{v}</div>
                       </div>
                     ))}
                   </div>
 
                   {/* Times */}
-                  <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 14 : 12, marginBottom:isMobile ? 24 : 20 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 16 : 12, marginBottom:isMobile ? 28 : 20 }}>
                     <div style={{ textAlign:"center" }}>
-                      <div style={{ fontSize:isMobile ? 20 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.departure}</div>
-                      <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 4 : 0 }}>{f.from.toUpperCase().slice(0,3)}</div>
+                      <div style={{ fontSize:isMobile ? 22 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.departure}</div>
+                      <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 6 : 0 }}>{f.from.toUpperCase().slice(0,3)}</div>
                     </div>
-                    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:isMobile ? 6 : 4 }}>
-                      <div style={{ width:"100%", height:isMobile ? 2 : 1, background:"rgba(255,255,255,0.08)", position:"relative", borderRadius:1 }}>
-                        {f.progress>0&&f.progress<100&&<div style={{ position:"absolute", left:`${f.progress}%`, top:isMobile ? -5 : -4, width:isMobile ? 10 : 8, height:isMobile ? 10 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 8px ${rc}`, transform:"translateX(-50%)" }}/>}
-                        {f.progress>0&&<div style={{ position:"absolute", left:0, width:`${f.progress}%`, height:isMobile ? 2 : 1, background:`linear-gradient(90deg,${rc}60,${rc})`, borderRadius:1 }}/>}
+                    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:isMobile ? 8 : 4 }}>
+                      <div style={{ width:"100%", height:isMobile ? 3 : 1, background:"rgba(255,255,255,0.08)", position:"relative", borderRadius:1 }}>
+                        {f.progress>0&&f.progress<100&&<div style={{ position:"absolute", left:`${f.progress}%`, top:isMobile ? -6 : -4, width:isMobile ? 12 : 8, height:isMobile ? 12 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 8px ${rc}`, transform:"translateX(-50%)" }}/>}
+                        {f.progress>0&&<div style={{ position:"absolute", left:0, width:`${f.progress}%`, height:isMobile ? 3 : 1, background:`linear-gradient(90deg,${rc}60,${rc})`, borderRadius:1 }}/>}
                       </div>
-                      <div style={{ fontSize:isMobile ? 10 : 8, color:"#444", fontFamily:"'DM Mono',monospace" }}>{f.altitude}</div>
+                      <div style={{ fontSize:isMobile ? 11 : 8, color:"#444", fontFamily:"'DM Mono',monospace" }}>{f.altitude}</div>
                     </div>
                     <div style={{ textAlign:"center" }}>
-                      <div style={{ fontSize:isMobile ? 20 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.arrival}</div>
-                      <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 4 : 0 }}>{f.to.toUpperCase().slice(0,3)}</div>
+                      <div style={{ fontSize:isMobile ? 22 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.arrival}</div>
+                      <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 6 : 0 }}>{f.to.toUpperCase().slice(0,3)}</div>
                     </div>
                   </div>
 
                   {/* Stats row */}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:isMobile ? "wrap" : "nowrap", gap:isMobile ? 12 : 0 }}>
-                    <div style={{ display:"flex", gap:isMobile ? 20 : 16 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:isMobile ? "wrap" : "nowrap", gap:isMobile ? 16 : 0 }}>
+                    <div style={{ display:"flex", gap:isMobile ? 24 : 16 }}>
                       <div>
-                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>PAX</div>
-                        <div style={{ fontSize:isMobile ? 15 : 13, color:"#ccc", fontWeight:600 }}>{f.passengers}</div>
+                        <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 4 : 0 }}>PAX</div>
+                        <div style={{ fontSize:isMobile ? 17 : 13, color:"#ccc", fontWeight:600 }}>{f.passengers}</div>
                       </div>
                       {f.co2>0&&<div>
-                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>CO₂</div>
-                        <div style={{ fontSize:isMobile ? 15 : 13, color:"#ccc", fontWeight:600 }}>{f.co2} t</div>
+                        <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 4 : 0 }}>CO₂</div>
+                        <div style={{ fontSize:isMobile ? 17 : 13, color:"#ccc", fontWeight:600 }}>{f.co2} t</div>
                       </div>}
                       <div>
-                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>RISK</div>
-                        <div style={{ fontSize:isMobile ? 15 : 13, color:rc, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{f.risk} <span style={{ fontSize:isMobile ? 10 : 9, color:rc }}>{RISK_LABEL(f.risk)}</span></div>
+                        <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 4 : 0 }}>RISK</div>
+                        <div style={{ fontSize:isMobile ? 17 : 13, color:rc, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{f.risk} <span style={{ fontSize:isMobile ? 11 : 9, color:rc }}>{RISK_LABEL(f.risk)}</span></div>
                       </div>
                     </div>
                     {!isArrived ? (
-                      <div style={{ background:`${rc}15`, border:`1px solid ${rc}35`, borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 24px" : "9px 20px", fontSize:isMobile ? 12 : 11, color:rc, fontWeight:700, letterSpacing:2, transition:"all .2s", opacity:isHov?1:0.7, minHeight:isMobile ? 44 : "auto", width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 8 : 0 }}>
+                      <div style={{ background:`${rc}15`, border:`1px solid ${rc}35`, borderRadius:isMobile ? 12 : 8, padding:isMobile ? "14px 28px" : "9px 20px", fontSize:isMobile ? 13 : 11, color:rc, fontWeight:700, letterSpacing:2, transition:"all .2s", opacity:isHov?1:0.7, minHeight:isMobile ? 50 : "auto", width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 12 : 0 }}>
                         OPEN DASHBOARD →
                       </div>
                     ) : (
-                      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 24px" : "9px 20px", fontSize:isMobile ? 12 : 11, color:"#444", letterSpacing:2, width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 8 : 0 }}>
+                      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? "14px 28px" : "9px 20px", fontSize:isMobile ? 13 : 11, color:"#444", letterSpacing:2, width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 12 : 0 }}>
                         FLIGHT COMPLETE
                       </div>
                     )}
@@ -1099,11 +1099,11 @@ function FlightSelectPage({ onSelect, onLogout }) {
         </div>
 
         {/* Fleet summary row */}
-        <div style={{ maxWidth:1040, margin:isMobile ? "40px auto 0" : "32px auto 0", display:"grid", gridTemplateColumns:isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:isMobile ? 16 : 14 }}>
+        <div style={{ maxWidth:1040, margin:isMobile ? "48px auto 0" : "32px auto 0", display:"grid", gridTemplateColumns:isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:isMobile ? 18 : 14 }}>
           {[{l:"ACTIVE FLIGHTS",v:"2",c:"#00e5c0"},{l:"BOARDING",v:"1",c:"#f5a623"},{l:"COMPLETED TODAY",v:"1",c:"#555"},{l:"FLEET RISK AVG",v:"18",c:"#00e5c0"}].map(({l,v,c})=>(
-            <div key={l} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:isMobile ? 14 : 10, padding:isMobile ? "20px 16px" : "16px 20px", textAlign:"center" }}>
-              <div style={{ fontSize:isMobile ? 36 : 28, fontWeight:800, color:c }}>{v}</div>
-              <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginTop:isMobile ? 8 : 4 }}>{l}</div>
+            <div key={l} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:isMobile ? 16 : 10, padding:isMobile ? "24px 18px" : "16px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:isMobile ? 40 : 28, fontWeight:800, color:c }}>{v}</div>
+              <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginTop:isMobile ? 10 : 4 }}>{l}</div>
             </div>
           ))}
         </div>
@@ -1214,17 +1214,17 @@ function Dashboard({ flight, onBack }) {
       </div>
 
       {/* Nav */}
-      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:isMobile ? "0 16px" : "0 28px", background:"rgba(0,0,0,0.3)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
+      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:isMobile ? "0 20px" : "0 28px", background:"rgba(0,0,0,0.3)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
         {tabs.map(t=>(
           <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)}
-            style={{ padding:isMobile ? "16px 18px" : "14px 20px", fontSize:isMobile ? 11 : 10, letterSpacing:isMobile ? 2 : 2.5, color:tab===t.id?"#00e5c0":"#555", borderBottom:tab===t.id?"2px solid #00e5c0":"2px solid transparent", fontWeight:tab===t.id?700:400, position:"relative", minHeight:isMobile ? 52 : "auto", whiteSpace:"nowrap" }}>
-            {t.badge&&<span style={{ position:"absolute", top:isMobile ? 10 : 8, right:2, fontSize:isMobile ? 8 : 7, background:"#00e5c0", color:"#000", borderRadius:3, padding:"1px 4px", fontWeight:800 }}>{t.badge}</span>}
+            style={{ padding:isMobile ? "18px 20px" : "14px 20px", fontSize:isMobile ? 12 : 10, letterSpacing:isMobile ? 2 : 2.5, color:tab===t.id?"#00e5c0":"#555", borderBottom:tab===t.id?"2px solid #00e5c0":"2px solid transparent", fontWeight:tab===t.id?700:400, position:"relative", minHeight:isMobile ? 56 : "auto", whiteSpace:"nowrap" }}>
+            {t.badge&&<span style={{ position:"absolute", top:isMobile ? 12 : 8, right:2, fontSize:isMobile ? 9 : 7, background:"#00e5c0", color:"#000", borderRadius:3, padding:"1px 4px", fontWeight:800 }}>{t.badge}</span>}
             {t.label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding:isMobile ? "24px 20px" : "24px 28px", animation:"fadeIn .3s ease", paddingBottom:isMobile ? 80 : 60 }}>
+      <div style={{ padding:isMobile ? "32px 24px" : "24px 28px", animation:"fadeIn .3s ease", paddingBottom:isMobile ? 80 : 60 }}>
 
         {tab==="sensor3d"&&<AircraftViewer3D sensors={fd.sensors3d}/>}
 
