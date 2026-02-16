@@ -846,25 +846,68 @@ function AircraftViewer3D({ sensors }) {
   );
 }
 
+// ─── Login History Storage ────────────────────────────────────────────────────
+function saveLoginHistory(name) {
+  const loginEntry = {
+    name,
+    timestamp: new Date().toISOString(),
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString()
+  };
+  
+  const history = JSON.parse(localStorage.getItem('aerosense_login_history') || '[]');
+  history.unshift(loginEntry); // Add to beginning
+  // Keep only last 100 entries
+  if (history.length > 100) {
+    history.pop();
+  }
+  localStorage.setItem('aerosense_login_history', JSON.stringify(history));
+  
+  // Also save current user
+  localStorage.setItem('aerosense_current_user', JSON.stringify(loginEntry));
+}
+
+function getLoginHistory() {
+  return JSON.parse(localStorage.getItem('aerosense_login_history') || '[]');
+}
+
+function getCurrentUser() {
+  const user = localStorage.getItem('aerosense_current_user');
+  return user ? JSON.parse(user) : null;
+}
+
 // ─── Login Page ───────────────────────────────────────────────────────────────
 function LoginPage({ onSuccess }) {
+  const [name, setName] = useState("");
   const [pw, setPw] = useState("");
   const [error, setError] = useState(false);
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dots, setDots] = useState(0);
-  const inputRef = useRef(null);
+  const nameInputRef = useRef(null);
+  const pwInputRef = useRef(null);
 
-  useEffect(()=>{ inputRef.current?.focus(); },[]);
+  useEffect(()=>{ nameInputRef.current?.focus(); },[]);
   useEffect(()=>{
     const iv = setInterval(()=>setDots(d=>(d+1)%4),500);
     return ()=>clearInterval(iv);
   },[]);
 
   const attempt = () => {
+    if (!name.trim()) {
+      setError(true);
+      setShake(true);
+      setTimeout(()=>{ setShake(false); setError(false); },700);
+      return;
+    }
+    
     if (pw === "admin001") {
       setLoading(true);
-      setTimeout(onSuccess, 1200);
+      // Save login history
+      saveLoginHistory(name.trim());
+      setTimeout(() => {
+        onSuccess(name.trim());
+      }, 1200);
     } else {
       setError(true); setShake(true);
       setTimeout(()=>{ setShake(false); setPw(""); setError(false); },700);
@@ -907,9 +950,17 @@ function LoginPage({ onSuccess }) {
           <div style={{ fontSize:11, color:"#555", letterSpacing:3, marginBottom:24, fontFamily:"'DM Mono',monospace" }}>SECURE ACCESS · OPERATOR LOGIN</div>
 
           <div style={{ marginBottom:16 }}>
-            <div style={{ fontSize:10, color:"#666", letterSpacing:2, marginBottom:8, fontFamily:"'DM Mono',monospace" }}>OPERATOR ID</div>
-            <div style={{ padding:"11px 14px", background:"rgba(0,0,0,0.3)", border:"1px solid rgba(255,255,255,0.08)", borderRadius:8, fontSize:12, color:"#aaa", fontFamily:"'DM Mono',monospace" }}>
-              ADMIN
+            <div style={{ fontSize:10, color:"#666", letterSpacing:2, marginBottom:8, fontFamily:"'DM Mono',monospace" }}>YOUR NAME</div>
+            <div style={{ animation:shake?"shake .4s ease":"none" }}>
+              <input
+                ref={nameInputRef}
+                type="text"
+                value={name}
+                onChange={e=>{ setName(e.target.value); setError(false); }}
+                onKeyDown={e=>e.key==="Enter"&&pwInputRef.current?.focus()}
+                placeholder="Enter your name"
+                style={{ width:"100%", padding:"11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":name.length>0?"rgba(0,229,192,0.4)":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s" }}
+              />
             </div>
           </div>
 
@@ -917,7 +968,7 @@ function LoginPage({ onSuccess }) {
             <div style={{ fontSize:10, color:"#666", letterSpacing:2, marginBottom:8, fontFamily:"'DM Mono',monospace" }}>PASSWORD</div>
             <div style={{ animation:shake?"shake .4s ease":"none" }}>
               <input
-                ref={inputRef}
+                ref={pwInputRef}
                 type="password"
                 value={pw}
                 onChange={e=>{ setPw(e.target.value); setError(false); }}
@@ -926,7 +977,7 @@ function LoginPage({ onSuccess }) {
                 style={{ width:"100%", padding:"11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":pw.length>0?"rgba(0,229,192,0.4)":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s", letterSpacing:pw.length>0?4:1 }}
               />
             </div>
-            {error&&<div style={{ fontSize:10, color:"#ff3b5c", marginTop:8, fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>⚠ ACCESS DENIED — INVALID CREDENTIALS</div>}
+            {error&&<div style={{ fontSize:10, color:"#ff3b5c", marginTop:8, fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>⚠ {name.trim() ? "ACCESS DENIED — INVALID CREDENTIALS" : "PLEASE ENTER YOUR NAME"}</div>}
           </div>
 
           <button
@@ -954,7 +1005,7 @@ const FLIGHT_DETAILS = [
   { id:"EK118", route:"DXB → CDG", from:"Dubai", to:"Paris CDG",       aircraft:"B777-200LR",status:"ARRIVED",  progress:100,fuel:36.8, co2:71.2, risk:0,  duration:"6h 44m", distance:"3,252 NM", altitude:"—",     passengers:266, departure:"06:00", arrival:"12:14", color:"#555" },
 ];
 
-function FlightSelectPage({ onSelect, onLogout }) {
+function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory }) {
   const [hovered, setHovered] = useState(null);
   const [time, setTime] = useState(new Date());
   const isMobile = useIsMobile();
@@ -962,6 +1013,7 @@ function FlightSelectPage({ onSelect, onLogout }) {
 
   const nowStr = time.toLocaleTimeString("en-GB",{ hour:"2-digit", minute:"2-digit", second:"2-digit" })+" UTC";
   const dateStr = time.toLocaleDateString("en-GB",{ weekday:"long", day:"numeric", month:"long", year:"numeric" });
+  const userName = currentUser?.name || "OPERATOR";
 
   return (
     <div style={{ minHeight:"100vh", background:"#070c14", fontFamily:"'Outfit',sans-serif", color:"#e0e8f0", display:"flex", flexDirection:"column" }}>
@@ -984,17 +1036,21 @@ function FlightSelectPage({ onSelect, onLogout }) {
             <div style={{ fontSize:9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AI FLIGHT INTELLIGENCE</div>
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:28 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 28, flexWrap:"wrap" }}>
           <div style={{ textAlign:"right" }}>
             <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>{dateStr.toUpperCase()}</div>
             <div style={{ fontSize:12, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", marginTop:2 }}>{nowStr}</div>
           </div>
-          <div style={{ width:1, height:32, background:"rgba(255,255,255,0.08)" }}/>
+          {!isMobile && <div style={{ width:1, height:32, background:"rgba(255,255,255,0.08)" }}/>}
           <div style={{ display:"flex", alignItems:"center", gap:8 }}>
             <div style={{ width:7, height:7, borderRadius:"50%", background:"#00e5c0", animation:"pulse 1.6s infinite" }}/>
-            <span style={{ fontSize:10, color:"#00e5c0", fontFamily:"'DM Mono',monospace" }}>ADMIN</span>
+            <span style={{ fontSize:isMobile ? 11 : 10, color:"#00e5c0", fontFamily:"'DM Mono',monospace", fontWeight:500 }}>{userName.toUpperCase()}</span>
           </div>
-          <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#666", borderRadius:7, padding:"6px 14px", cursor:"pointer", fontSize:10, fontFamily:"'Outfit',sans-serif", letterSpacing:1 }}>LOGOUT</button>
+          {!isMobile && <div style={{ width:1, height:32, background:"rgba(255,255,255,0.08)" }}/>}
+          <div style={{ display:"flex", gap:isMobile ? 8 : 12, flexWrap:"wrap" }}>
+            <button onClick={onViewHistory} style={{ background:"rgba(0,229,192,0.08)", border:"1px solid rgba(0,229,192,0.2)", color:"#00e5c0", borderRadius:7, padding:isMobile ? "8px 12px" : "6px 14px", cursor:"pointer", fontSize:isMobile ? 10 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, minHeight:isMobile ? 44 : "auto" }}>📋 HISTORY</button>
+            <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#666", borderRadius:7, padding:isMobile ? "8px 12px" : "6px 14px", cursor:"pointer", fontSize:isMobile ? 10 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, minHeight:isMobile ? 44 : "auto" }}>LOGOUT</button>
+          </div>
         </div>
       </div>
 
@@ -1112,15 +1168,107 @@ function FlightSelectPage({ onSelect, onLogout }) {
   );
 }
 
+// ─── Login History Page ───────────────────────────────────────────────────────
+function LoginHistoryPage({ onBack }) {
+  const [history, setHistory] = useState([]);
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    setHistory(getLoginHistory());
+  }, []);
+
+  const formatDateTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return {
+      date: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#070c14", fontFamily:"'Outfit',sans-serif", color:"#e0e8f0", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes gridPulse{0%,100%{opacity:0.03}50%{opacity:0.06}}
+        *{box-sizing:border-box;margin:0;padding:0}
+      `}</style>
+      <div style={{ position:"fixed", inset:0, backgroundImage:"linear-gradient(rgba(0,229,192,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,192,0.035) 1px,transparent 1px)", backgroundSize:"48px 48px", animation:"gridPulse 5s ease infinite", pointerEvents:"none" }}/>
+
+      {/* Header */}
+      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(0,229,192,0.1)", padding:isMobile ? "0 16px" : "0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 56 : 62, position:"sticky", top:0, zIndex:100 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 16 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:isMobile ? 8 : 7, padding:isMobile ? "10px 14px" : "6px 12px", cursor:"pointer", fontSize:isMobile ? 11 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6, minHeight:isMobile ? 44 : "auto" }}>
+            ← BACK
+          </button>
+          <div style={{ width:isMobile ? 36 : 30, height:isMobile ? 36 : 30, borderRadius:isMobile ? 9 : 7, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 15 }}>✈</div>
+          <div>
+            <div style={{ fontSize:isMobile ? 15 : 13, fontWeight:800, letterSpacing:2 }}>LOGIN HISTORY</div>
+            <div style={{ fontSize:isMobile ? 10 : 9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · AUDIT LOG</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "40px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+        <div style={{ marginBottom:isMobile ? 32 : 40, textAlign:"center" }}>
+          <div style={{ fontSize:isMobile ? 13 : 11, color:"#00e5c0", letterSpacing:isMobile ? 3 : 4, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 16 : 12 }}>AUTHENTICATION LOG · SECURITY AUDIT</div>
+          <div style={{ fontSize:isMobile ? 32 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0" }}>Login History</div>
+          <div style={{ fontSize:isMobile ? 13 : 14, color:"#555", marginTop:isMobile ? 12 : 10, fontWeight:400 }}>All operator login attempts and timestamps</div>
+        </div>
+
+        {history.length === 0 ? (
+          <div style={{ textAlign:"center", padding:isMobile ? "60px 20px" : "80px 40px" }}>
+            <div style={{ fontSize:isMobile ? 48 : 64, marginBottom:isMobile ? 20 : 24 }}>📋</div>
+            <div style={{ fontSize:isMobile ? 18 : 20, color:"#666", marginBottom:isMobile ? 12 : 16 }}>No login history</div>
+            <div style={{ fontSize:isMobile ? 13 : 14, color:"#444" }}>Login attempts will appear here</div>
+          </div>
+        ) : (
+          <div style={{ maxWidth:900, margin:"0 auto", display:"flex", flexDirection:"column", gap:isMobile ? 14 : 12 }}>
+            {history.map((entry, i) => {
+              const dt = formatDateTime(entry.timestamp);
+              return (
+                <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 18, animation:`fadeIn .3s ease ${i*0.05}s both` }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:isMobile ? 12 : 8 }}>
+                    <div style={{ flex:1 }}>
+                      <div style={{ fontSize:isMobile ? 18 : 16, fontWeight:700, color:"#e0e8f0", marginBottom:isMobile ? 6 : 4 }}>{entry.name}</div>
+                      <div style={{ fontSize:isMobile ? 12 : 11, color:"#666", fontFamily:"'DM Mono',monospace" }}>
+                        {dt.date} · {dt.time}
+                      </div>
+                    </div>
+                    <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                      <div style={{ width:isMobile ? 10 : 8, height:isMobile ? 10 : 8, borderRadius:"50%", background:"#00e5c0", boxShadow:"0 0 8px #00e5c0" }}/>
+                      <span style={{ fontSize:isMobile ? 11 : 10, color:"#00e5c0", fontFamily:"'DM Mono',monospace" }}>ACTIVE</span>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App (router) ────────────────────────────────────────────────────────
 export default function AviationAI() {
-  const [page, setPage] = useState("login"); // "login" | "select" | "dashboard"
+  const [page, setPage] = useState("login"); // "login" | "select" | "dashboard" | "history"
   const [activeFlight, setActiveFlight] = useState(null);
+  const [currentUser, setCurrentUser] = useState(null);
+
+  useEffect(() => {
+    const user = getCurrentUser();
+    if (user) {
+      setCurrentUser(user);
+    }
+  }, []);
+
   return (
     <>
-      {page==="login"&&<LoginPage onSuccess={()=>setPage("select")}/>}
-      {page==="select"&&<FlightSelectPage onSelect={f=>{ setActiveFlight(f); setPage("dashboard"); }} onLogout={()=>setPage("login")}/>}
+      {page==="login"&&<LoginPage onSuccess={(name) => { setCurrentUser({ name, timestamp: new Date().toISOString() }); setPage("select"); }}/>}
+      {page==="select"&&<FlightSelectPage currentUser={currentUser} onSelect={f=>{ setActiveFlight(f); setPage("dashboard"); }} onLogout={()=>{ setCurrentUser(null); localStorage.removeItem('aerosense_current_user'); setPage("login"); }} onViewHistory={()=>setPage("history")}/>}
       {page==="dashboard"&&<Dashboard flight={activeFlight} onBack={()=>setPage("select")}/>}
+      {page==="history"&&<LoginHistoryPage onBack={()=>setPage("select")}/>}
     </>
   );
 }
