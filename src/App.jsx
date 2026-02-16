@@ -355,13 +355,23 @@ function AircraftViewer3D({ sensors }) {
     
     // Detect mobile device
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
-    const pixelRatio = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
+    const pixelRatio = isMobile ? Math.min(window.devicePixelRatio, 1.2) : Math.min(window.devicePixelRatio, 2);
+    const geometryDetail = isMobile ? 12 : 24; // Reduce geometry segments on mobile
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias:!isMobile, alpha:true, powerPreference: "high-performance" });
+    const renderer = new THREE.WebGLRenderer({ 
+      antialias:!isMobile, 
+      alpha:true, 
+      powerPreference: "high-performance",
+      stencil: false,
+      depth: true
+    });
     renderer.setSize(W,H);
     renderer.setPixelRatio(pixelRatio);
     renderer.setClearColor(0x000000,0);
+    if (isMobile) {
+      renderer.shadowMap.enabled = false; // Disable shadows on mobile
+    }
     mount.appendChild(renderer.domElement);
 
     // Scene / Camera
@@ -382,8 +392,9 @@ function AircraftViewer3D({ sensors }) {
     fill.position.set(0,-8,4);
     scene.add(fill);
 
-    // Grid floor
-    const grid = new THREE.GridHelper(28,28,0x0a1828,0x060e1a);
+    // Grid floor - simpler on mobile
+    const gridSize = isMobile ? 14 : 28;
+    const grid = new THREE.GridHelper(gridSize, gridSize, 0x0a1828, 0x060e1a);
     grid.position.y = -3.5;
     scene.add(grid);
 
@@ -399,48 +410,52 @@ function AircraftViewer3D({ sensors }) {
     scene.add(aircraft);
 
     // — Fuselage
-    const fuseG = new THREE.CylinderGeometry(0.46,0.46,10,24);
+    const fuseG = new THREE.CylinderGeometry(0.46,0.46,10,geometryDetail);
     const fuse = new THREE.Mesh(fuseG, bodyMat);
     fuse.rotation.x = Math.PI/2;
     aircraft.add(fuse);
 
     // — Nose cone
-    const noseG = new THREE.ConeGeometry(0.46,2.1,24);
+    const noseG = new THREE.ConeGeometry(0.46,2.1,geometryDetail);
     const nose = new THREE.Mesh(noseG, bodyMat);
     nose.rotation.x = -Math.PI/2;
     nose.position.z = 6.05;
     aircraft.add(nose);
 
-    // — Nose tip (pitot)
-    const pitotG = new THREE.CylinderGeometry(0.025,0.025,0.5,8);
-    const pitot = new THREE.Mesh(pitotG, new THREE.MeshPhongMaterial({ color:0xaabbcc, shininess:120 }));
-    pitot.rotation.x = Math.PI/2;
-    pitot.position.z = 7.35;
-    aircraft.add(pitot);
+    // — Nose tip (pitot) - skip on mobile for performance
+    if (!isMobile) {
+      const pitotG = new THREE.CylinderGeometry(0.025,0.025,0.5,8);
+      const pitot = new THREE.Mesh(pitotG, new THREE.MeshPhongMaterial({ color:0xaabbcc, shininess:120 }));
+      pitot.rotation.x = Math.PI/2;
+      pitot.position.z = 7.35;
+      aircraft.add(pitot);
+    }
 
     // — Windshield
-    const windG = new THREE.CylinderGeometry(0.28,0.40,0.5,16,1,false,-0.3,1.1);
+    const windG = new THREE.CylinderGeometry(0.28,0.40,0.5,isMobile ? 8 : 16,1,false,-0.3,1.1);
     const wind = new THREE.Mesh(windG, glassMat);
     wind.rotation.x = -1.1;
     wind.position.set(0,0.22,5.6);
     aircraft.add(wind);
 
     // — Tail taper
-    const tailG = new THREE.ConeGeometry(0.36,1.5,24);
+    const tailG = new THREE.ConeGeometry(0.36,1.5,geometryDetail);
     const tail = new THREE.Mesh(tailG, bodyMat);
     tail.rotation.x = Math.PI/2;
     tail.position.z = -5.75;
     aircraft.add(tail);
 
-    // — APU exhaust
-    const apuG = new THREE.CylinderGeometry(0.07,0.07,0.25,8);
-    const apu = new THREE.Mesh(apuG, engMat);
-    apu.rotation.x = Math.PI/2;
-    apu.position.z = -5.95;
-    aircraft.add(apu);
+    // — APU exhaust - skip on mobile
+    if (!isMobile) {
+      const apuG = new THREE.CylinderGeometry(0.07,0.07,0.25,8);
+      const apu = new THREE.Mesh(apuG, engMat);
+      apu.rotation.x = Math.PI/2;
+      apu.position.z = -5.95;
+      aircraft.add(apu);
+    }
 
     // — Livery stripe
-    const stripeG = new THREE.CylinderGeometry(0.47,0.47,3.2,24,1,true);
+    const stripeG = new THREE.CylinderGeometry(0.47,0.47,3.2,geometryDetail,1,true);
     const stripe = new THREE.Mesh(stripeG, liveryMat);
     stripe.rotation.x = Math.PI/2;
     stripe.position.z = 1.4;
@@ -495,6 +510,7 @@ function AircraftViewer3D({ sensors }) {
       { x: 1.85, y:-0.58, z:0.5 },
       { x: 3.35, y:-0.58, z:0.2 },
     ];
+    const engineDetail = isMobile ? 12 : 20;
     engCfg.forEach(({ x,y,z })=>{
       // Pylon
       const pylG = new THREE.BoxGeometry(0.13,0.42,1.0);
@@ -502,22 +518,24 @@ function AircraftViewer3D({ sensors }) {
       pylMesh.position.set(x, y+0.38, z);
       aircraft.add(pylMesh);
       // Nacelle
-      const nacG = new THREE.CylinderGeometry(0.245,0.265,1.85,20);
+      const nacG = new THREE.CylinderGeometry(0.245,0.265,1.85,engineDetail);
       const nac = new THREE.Mesh(nacG, engMat);
       nac.rotation.x=Math.PI/2; nac.position.set(x,y,z);
       aircraft.add(nac);
-      // Intake lip
-      const lipG = new THREE.TorusGeometry(0.255,0.038,10,22);
-      const lip = new THREE.Mesh(lipG, new THREE.MeshPhongMaterial({ color:0x0a1828, shininess:90 }));
-      lip.position.set(x,y,z+0.93);
-      aircraft.add(lip);
+      // Intake lip - skip on mobile
+      if (!isMobile) {
+        const lipG = new THREE.TorusGeometry(0.255,0.038,8,16);
+        const lip = new THREE.Mesh(lipG, new THREE.MeshPhongMaterial({ color:0x0a1828, shininess:90 }));
+        lip.position.set(x,y,z+0.93);
+        aircraft.add(lip);
+      }
       // Fan face
-      const fanG = new THREE.CircleGeometry(0.215,20);
+      const fanG = new THREE.CircleGeometry(0.215,engineDetail);
       const fan = new THREE.Mesh(fanG, new THREE.MeshPhongMaterial({ color:0x050b14, emissive:0x001122, emissiveIntensity:0.5 }));
       fan.position.set(x,y,z+0.95);
       aircraft.add(fan);
       // Exhaust nozzle
-      const exG = new THREE.CylinderGeometry(0.19,0.14,0.38,16);
+      const exG = new THREE.CylinderGeometry(0.19,0.14,0.38,isMobile ? 10 : 16);
       const ex = new THREE.Mesh(exG,engMat);
       ex.rotation.x=Math.PI/2; ex.position.set(x,y,z-1.02);
       aircraft.add(ex);
@@ -528,27 +546,30 @@ function AircraftViewer3D({ sensors }) {
     const sGroup = new THREE.Group();
     aircraft.add(sGroup);
 
+    const sensorDetail = isMobile ? 8 : 14;
     SENSORS_3D.forEach((sensor)=>{
       const col = RISK_COLOR_HEX(sensor.risk);
       // Glow sphere
-      const glowG = new THREE.SphereGeometry(0.22,14,14);
+      const glowG = new THREE.SphereGeometry(0.22,sensorDetail,sensorDetail);
       const glowM = new THREE.MeshBasicMaterial({ color:col, transparent:true, opacity:0.11 });
       const glow = new THREE.Mesh(glowG,glowM);
       glow.position.set(...sensor.pos);
       sGroup.add(glow);
       // Core
-      const coreG = new THREE.SphereGeometry(0.10,14,14);
+      const coreG = new THREE.SphereGeometry(0.10,sensorDetail,sensorDetail);
       const coreM = new THREE.MeshPhongMaterial({ color:col, emissive:col, emissiveIntensity:0.75, shininess:60 });
       const core = new THREE.Mesh(coreG,coreM);
       core.position.set(...sensor.pos);
       core.userData = { sensor, glow, glowM, coreM };
       sGroup.add(core);
       sensorMeshes.push(core);
-      // Connector stub
-      const dir = new THREE.Vector3(...sensor.pos).normalize();
-      const pts = [new THREE.Vector3(...sensor.pos), new THREE.Vector3(...sensor.pos).addScaledVector(dir,-0.22)];
-      const lG = new THREE.BufferGeometry().setFromPoints(pts);
-      sGroup.add(new THREE.Line(lG, new THREE.LineBasicMaterial({ color:col, transparent:true, opacity:0.35 })));
+      // Connector stub - skip on mobile
+      if (!isMobile) {
+        const dir = new THREE.Vector3(...sensor.pos).normalize();
+        const pts = [new THREE.Vector3(...sensor.pos), new THREE.Vector3(...sensor.pos).addScaledVector(dir,-0.22)];
+        const lG = new THREE.BufferGeometry().setFromPoints(pts);
+        sGroup.add(new THREE.Line(lG, new THREE.LineBasicMaterial({ color:col, transparent:true, opacity:0.35 })));
+      }
     });
 
     // Mouse/Touch interaction
@@ -611,24 +632,39 @@ function AircraftViewer3D({ sensors }) {
     mount.addEventListener("touchend",onUp, { passive: false });
     mount.addEventListener("touchcancel",onUp, { passive: false });
 
-    // Animation loop
-    let rafId, t=0;
-    const animate=()=>{
+    // Animation loop - reduced frequency on mobile
+    let rafId, t=0, lastFrameTime=0;
+    const targetFPS = isMobile ? 30 : 60;
+    const frameInterval = 1000 / targetFPS;
+    
+    const animate=(currentTime)=>{
       rafId=requestAnimationFrame(animate);
-      t+=0.016;
-      if(!isDragging){ aircraft.rotation.y+=velX*0.94; velX*=0.94; aircraft.rotation.y+=0.0025; }
+      
+      // Throttle animation on mobile
+      if (isMobile && currentTime - lastFrameTime < frameInterval) {
+        return;
+      }
+      lastFrameTime = currentTime;
+      
+      t+=isMobile ? 0.024 : 0.016; // Slower animation on mobile
+      if(!isDragging){ 
+        aircraft.rotation.y+=velX*0.94; 
+        velX*=0.94; 
+        aircraft.rotation.y+=isMobile ? 0.0015 : 0.0025; // Slower auto-rotation
+      }
       sensorMeshes.forEach((m,i)=>{
         const { sensor, glowM, coreM }=m.userData;
         const isSel=sensor.id===stateRef.current.selectedId;
         const isHov=sensor.id===stateRef.current.hoveredId;
-        const p=0.88+0.28*Math.sin(t*2.5+i*0.62);
+        const animSpeed = isMobile ? 1.5 : 2.5;
+        const p=0.88+0.28*Math.sin(t*animSpeed+i*0.62);
         m.scale.setScalar(isSel?1.6:isHov?1.3:p);
-        coreM.emissiveIntensity=isSel?1.3:isHov?1.0:0.5+0.35*Math.sin(t*2.5+i*0.62);
-        glowM.opacity=isSel?0.38:isHov?0.26:0.08+0.07*Math.sin(t*2.5+i*0.62);
+        coreM.emissiveIntensity=isSel?1.3:isHov?1.0:0.5+0.35*Math.sin(t*animSpeed+i*0.62);
+        glowM.opacity=isSel?0.38:isHov?0.26:0.08+0.07*Math.sin(t*animSpeed+i*0.62);
       });
       renderer.render(scene,camera);
     };
-    animate();
+    animate(0);
 
     const onResize=()=>{
       const nW=mount.clientWidth, nH=mount.clientHeight;
@@ -659,105 +695,129 @@ function AircraftViewer3D({ sensors }) {
   const isMobile = useIsMobile();
   
   return (
-    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 340px", gap:16 }}>
+    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 340px", gap:isMobile ? 24 : 16 }}>
       {/* Canvas */}
       <div style={{ position:"relative" }}>
         {/* Legend */}
-        <div style={{ position:"absolute", top:14, left:14, zIndex:10, display:"flex", flexDirection:"column", gap:6 }}>
-          <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:4 }}>SENSOR STATUS</div>
-          {[["NOMINAL","#00e5c0"],["WATCH","#f5a623"],["CRITICAL","#ff3b5c"]].map(([lbl,col])=>(
-            <div key={lbl} style={{ display:"flex", alignItems:"center", gap:7 }}>
-              <span style={{ width:9, height:9, borderRadius:"50%", background:col, display:"inline-block", boxShadow:`0 0 8px ${col}` }}/>
-              <span style={{ fontSize:9, color:col, fontFamily:"'DM Mono',monospace" }}>{lbl}</span>
-            </div>
-          ))}
-        </div>
-        {/* Hint */}
-        <div style={{ position:"absolute", bottom:14, left:14, zIndex:10 }}>
-          <span style={{ fontSize:9, color:"#444", fontFamily:"'DM Mono',monospace" }}>DRAG TO ROTATE · CLICK SENSOR FOR DETAIL</span>
-        </div>
-        {/* Subsystem pills */}
-        <div style={{ position:"absolute", top:14, right:14, zIndex:10, display:"flex", flexDirection:"column", gap:5, alignItems:"flex-end" }}>
-          <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:2 }}>SUBSYSTEMS</div>
-          {subsystems.map(sid=>{
-            const meta=SUBSYSTEM_META[sid];
-            const maxRisk=Math.max(...SENSORS_3D.filter(s=>s.subsystem===sid).map(s=>s.risk));
-            const count=SENSORS_3D.filter(s=>s.subsystem===sid).length;
-            return (
-              <div key={sid} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.55)", border:`1px solid ${meta?.color??'#333'}22`, borderRadius:5, padding:"4px 10px" }}>
-                <span style={{ fontSize:11 }}>{meta?.icon}</span>
-                <span style={{ fontSize:9, color:"#888", fontFamily:"'DM Mono',monospace" }}>{meta?.name}</span>
-                <span style={{ fontSize:9, color:RISK_COLOR(maxRisk), fontFamily:"'DM Mono',monospace" }}>{count}×</span>
+        {!isMobile && (
+          <div style={{ position:"absolute", top:14, left:14, zIndex:10, display:"flex", flexDirection:"column", gap:6 }}>
+            <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:4 }}>SENSOR STATUS</div>
+            {[["NOMINAL","#00e5c0"],["WATCH","#f5a623"],["CRITICAL","#ff3b5c"]].map(([lbl,col])=>(
+              <div key={lbl} style={{ display:"flex", alignItems:"center", gap:7 }}>
+                <span style={{ width:9, height:9, borderRadius:"50%", background:col, display:"inline-block", boxShadow:`0 0 8px ${col}` }}/>
+                <span style={{ fontSize:9, color:col, fontFamily:"'DM Mono',monospace" }}>{lbl}</span>
               </div>
-            );
-          })}
-        </div>
+            ))}
+          </div>
+        )}
+        {/* Hint */}
+        {!isMobile && (
+          <div style={{ position:"absolute", bottom:14, left:14, zIndex:10 }}>
+            <span style={{ fontSize:9, color:"#444", fontFamily:"'DM Mono',monospace" }}>DRAG TO ROTATE · CLICK SENSOR FOR DETAIL</span>
+          </div>
+        )}
+        {/* Subsystem pills - hide on mobile */}
+        {!isMobile && (
+          <div style={{ position:"absolute", top:14, right:14, zIndex:10, display:"flex", flexDirection:"column", gap:5, alignItems:"flex-end" }}>
+            <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:2 }}>SUBSYSTEMS</div>
+            {subsystems.map(sid=>{
+              const meta=SUBSYSTEM_META[sid];
+              const maxRisk=Math.max(...SENSORS_3D.filter(s=>s.subsystem===sid).map(s=>s.risk));
+              const count=SENSORS_3D.filter(s=>s.subsystem===sid).length;
+              return (
+                <div key={sid} style={{ display:"flex", alignItems:"center", gap:6, background:"rgba(0,0,0,0.55)", border:`1px solid ${meta?.color??'#333'}22`, borderRadius:5, padding:"4px 10px" }}>
+                  <span style={{ fontSize:11 }}>{meta?.icon}</span>
+                  <span style={{ fontSize:9, color:"#888", fontFamily:"'DM Mono',monospace" }}>{meta?.name}</span>
+                  <span style={{ fontSize:9, color:RISK_COLOR(maxRisk), fontFamily:"'DM Mono',monospace" }}>{count}×</span>
+                </div>
+              );
+            })}
+          </div>
+        )}
+        {/* Mobile legend below canvas */}
+        {isMobile && (
+          <div style={{ marginTop:16, display:"flex", justifyContent:"center", gap:16, flexWrap:"wrap" }}>
+            {[["NOMINAL","#00e5c0"],["WATCH","#f5a623"],["CRITICAL","#ff3b5c"]].map(([lbl,col])=>(
+              <div key={lbl} style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ width:12, height:12, borderRadius:"50%", background:col, display:"inline-block", boxShadow:`0 0 8px ${col}` }}/>
+                <span style={{ fontSize:12, color:col, fontFamily:"'DM Mono',monospace", fontWeight:500 }}>{lbl}</span>
+              </div>
+            ))}
+          </div>
+        )}
         <div ref={mountRef}
-          style={{ width:"100%", height:isMobile ? 400 : 600, borderRadius:12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab", touchAction:"none" }}
+          style={{ width:"100%", height:isMobile ? 350 : 600, borderRadius:isMobile ? 16 : 12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab", touchAction:"none" }}
         />
+        {isMobile && (
+          <div style={{ marginTop:12, textAlign:"center" }}>
+            <span style={{ fontSize:11, color:"#666", fontFamily:"'DM Mono',monospace" }}>Touch and drag to rotate · Tap sensor for details</span>
+          </div>
+        )}
       </div>
 
       {/* Right panel */}
-      <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+      <div style={{ display:"flex", flexDirection:"column", gap:isMobile ? 20 : 12 }}>
         {selected ? (
-          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${RISK_COLOR(selected.risk)}35`, borderRadius:12, padding:20, flex:1 }}>
-            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:14 }}>
-              <div>
-                <div style={{ fontSize:8, color:"#555", letterSpacing:2, marginBottom:5 }}>SELECTED SENSOR</div>
-                <div style={{ fontSize:14, fontFamily:"'Outfit',sans-serif", fontWeight:800, color:"#e0e8f0", lineHeight:1.3 }}>{selected.name}</div>
-                <div style={{ fontSize:10, color:"#666", marginTop:4 }}>{SUBSYSTEM_META[selected.subsystem]?.icon} {SUBSYSTEM_META[selected.subsystem]?.name}</div>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${RISK_COLOR(selected.risk)}35`, borderRadius:isMobile ? 16 : 12, padding:isMobile ? 24 : 20, flex:1 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 20 : 14 }}>
+              <div style={{ flex:1 }}>
+                <div style={{ fontSize:isMobile ? 10 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 8 : 5 }}>SELECTED SENSOR</div>
+                <div style={{ fontSize:isMobile ? 18 : 14, fontFamily:"'Outfit',sans-serif", fontWeight:800, color:"#e0e8f0", lineHeight:1.3 }}>{selected.name}</div>
+                <div style={{ fontSize:isMobile ? 12 : 10, color:"#666", marginTop:isMobile ? 6 : 4 }}>{SUBSYSTEM_META[selected.subsystem]?.icon} {SUBSYSTEM_META[selected.subsystem]?.name}</div>
               </div>
-              <button onClick={()=>setSelected(null)} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontSize:10, fontFamily:"'DM Mono',monospace" }}>✕ ESC</button>
+              <button onClick={()=>setSelected(null)} style={{ background:"rgba(255,255,255,0.05)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:8, padding:isMobile ? "8px 14px" : "4px 10px", cursor:"pointer", fontSize:isMobile ? 12 : 10, fontFamily:"'DM Mono',monospace", minWidth:isMobile ? 50 : "auto", minHeight:isMobile ? 44 : "auto" }}>✕</button>
             </div>
             {/* Gauge */}
-            <div style={{ display:"flex", alignItems:"center", gap:14, marginBottom:16, padding:"12px 14px", background:"rgba(0,0,0,0.3)", borderRadius:8 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 18 : 14, marginBottom:isMobile ? 20 : 16, padding:isMobile ? "16px 18px" : "12px 14px", background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 12 : 8 }}>
               <div style={{ position:"relative" }}>
-                <GaugeRing value={selected.risk} size={64} stroke={6} color={RISK_COLOR(selected.risk)}/>
-                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:13, fontFamily:"'DM Mono',monospace", color:RISK_COLOR(selected.risk), fontWeight:700 }}>{selected.risk}</div>
+                <GaugeRing value={selected.risk} size={isMobile ? 80 : 64} stroke={isMobile ? 8 : 6} color={RISK_COLOR(selected.risk)}/>
+                <div style={{ position:"absolute", inset:0, display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 13, fontFamily:"'DM Mono',monospace", color:RISK_COLOR(selected.risk), fontWeight:700 }}>{selected.risk}</div>
               </div>
               <div>
-                <div style={{ fontSize:13, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{RISK_LABEL(selected.risk)}</div>
-                <div style={{ fontSize:9, color:"#555", marginTop:3 }}>Risk Score / 100</div>
-                <div style={{ fontSize:9, color:"#444", marginTop:6, fontFamily:"'DM Mono',monospace" }}>XYZ {selected.pos.map(v=>v.toFixed(1)).join(" · ")}</div>
+                <div style={{ fontSize:isMobile ? 16 : 13, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{RISK_LABEL(selected.risk)}</div>
+                <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", marginTop:isMobile ? 4 : 3 }}>Risk Score / 100</div>
+                {!isMobile && (
+                  <div style={{ fontSize:9, color:"#444", marginTop:6, fontFamily:"'DM Mono',monospace" }}>XYZ {selected.pos.map(v=>v.toFixed(1)).join(" · ")}</div>
+                )}
               </div>
             </div>
             {/* Readings */}
-            <div style={{ marginBottom:14 }}>
-              <div style={{ fontSize:8, color:"#555", letterSpacing:2, marginBottom:10 }}>LIVE READINGS</div>
+            <div style={{ marginBottom:isMobile ? 20 : 14 }}>
+              <div style={{ fontSize:isMobile ? 10 : 8, color:"#555", letterSpacing:2, marginBottom:isMobile ? 14 : 10 }}>LIVE READINGS</div>
               {selected.signals.map((sig,i)=>{
                 const parts=sig.split(": ");
                 return (
-                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"7px 10px", background:"rgba(0,0,0,0.25)", borderRadius:5, marginBottom:5 }}>
-                    <span style={{ fontSize:10, color:"#888", fontFamily:"'DM Mono',monospace" }}>{parts[0]}</span>
-                    <span style={{ fontSize:10, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{parts[1]}</span>
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:isMobile ? "12px 14px" : "7px 10px", background:"rgba(0,0,0,0.25)", borderRadius:isMobile ? 8 : 5, marginBottom:isMobile ? 8 : 5 }}>
+                    <span style={{ fontSize:isMobile ? 12 : 10, color:"#888", fontFamily:"'DM Mono',monospace" }}>{parts[0]}</span>
+                    <span style={{ fontSize:isMobile ? 12 : 10, color:RISK_COLOR(selected.risk), fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{parts[1]}</span>
                   </div>
                 );
               })}
             </div>
             {/* AI note */}
-            <div style={{ background:"rgba(0,229,192,0.04)", border:"1px solid rgba(0,229,192,0.12)", borderRadius:8, padding:14 }}>
-              <div style={{ fontSize:8, color:"#00e5c0", letterSpacing:2, marginBottom:8 }}>🤖 AI ANALYSIS</div>
-              <p style={{ fontSize:10, color:"#bbb", lineHeight:1.85 }}>{selected.note}</p>
+            <div style={{ background:"rgba(0,229,192,0.04)", border:"1px solid rgba(0,229,192,0.12)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? 18 : 14 }}>
+              <div style={{ fontSize:isMobile ? 10 : 8, color:"#00e5c0", letterSpacing:2, marginBottom:isMobile ? 12 : 8 }}>🤖 AI ANALYSIS</div>
+              <p style={{ fontSize:isMobile ? 12 : 10, color:"#bbb", lineHeight:isMobile ? 1.8 : 1.85 }}>{selected.note}</p>
             </div>
           </div>
         ) : (
-          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:18, flex:1, overflowY:"auto", maxHeight:460 }}>
-            <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:14 }}>ALL SENSOR NODES — {SENSORS_3D.length} TOTAL</div>
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 18, flex:1, overflowY:"auto", maxHeight:isMobile ? "none" : 460 }}>
+            <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 18 : 14 }}>ALL SENSOR NODES — {SENSORS_3D.length} TOTAL</div>
             {SENSORS_3D.map(s=>{
               const rc=RISK_COLOR(s.risk);
               return (
                 <div key={s.id} onClick={()=>setSelected(s)}
-                  style={{ display:"flex", alignItems:"center", gap:10, padding:"9px 12px", background:"rgba(0,0,0,0.2)", borderRadius:7, marginBottom:6, cursor:"pointer", border:`1px solid ${rc}15` }}
-                  onMouseEnter={e=>e.currentTarget.style.background="rgba(0,229,192,0.05)"}
-                  onMouseLeave={e=>e.currentTarget.style.background="rgba(0,0,0,0.2)"}>
-                  <div style={{ width:8, height:8, borderRadius:"50%", background:rc, boxShadow:`0 0 6px ${rc}`, flexShrink:0 }}/>
+                  style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 10, padding:isMobile ? "14px 16px" : "9px 12px", background:"rgba(0,0,0,0.2)", borderRadius:isMobile ? 10 : 7, marginBottom:isMobile ? 10 : 6, cursor:"pointer", border:`1px solid ${rc}15`, minHeight:isMobile ? 60 : "auto" }}
+                  onMouseEnter={e=>!isMobile && (e.currentTarget.style.background="rgba(0,229,192,0.05)")}
+                  onMouseLeave={e=>!isMobile && (e.currentTarget.style.background="rgba(0,0,0,0.2)")}>
+                  <div style={{ width:isMobile ? 12 : 8, height:isMobile ? 12 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 6px ${rc}`, flexShrink:0 }}/>
                   <div style={{ flex:1, minWidth:0 }}>
-                    <div style={{ fontSize:10, color:"#ccc", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{s.name}</div>
-                    <div style={{ fontSize:9, color:"#555" }}>{SUBSYSTEM_META[s.subsystem]?.icon} {SUBSYSTEM_META[s.subsystem]?.name}</div>
+                    <div style={{ fontSize:isMobile ? 13 : 10, color:"#ccc", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis", fontWeight:isMobile ? 500 : 400 }}>{s.name}</div>
+                    <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", marginTop:isMobile ? 4 : 0 }}>{SUBSYSTEM_META[s.subsystem]?.icon} {SUBSYSTEM_META[s.subsystem]?.name}</div>
                   </div>
                   <div style={{ textAlign:"right", flexShrink:0 }}>
-                    <div style={{ fontSize:11, color:rc, fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{s.risk}</div>
-                    <div style={{ fontSize:8, color:"#444" }}>risk</div>
+                    <div style={{ fontSize:isMobile ? 14 : 11, color:rc, fontFamily:"'DM Mono',monospace", fontWeight:700 }}>{s.risk}</div>
+                    <div style={{ fontSize:isMobile ? 10 : 8, color:"#444" }}>risk</div>
                   </div>
                 </div>
               );
@@ -766,17 +826,17 @@ function AircraftViewer3D({ sensors }) {
         )}
 
         {/* Summary */}
-        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:12, padding:16 }}>
-          <div style={{ fontSize:9, color:"#555", letterSpacing:2, marginBottom:12 }}>FLEET SENSOR SUMMARY</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:8 }}>
+        <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 16 }}>
+          <div style={{ fontSize:isMobile ? 11 : 9, color:"#555", letterSpacing:2, marginBottom:isMobile ? 16 : 12 }}>FLEET SENSOR SUMMARY</div>
+          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 12 : 8 }}>
             {[
               { lbl:"NOMINAL",  val:SENSORS_3D.filter(s=>s.risk<30).length,                    col:"#00e5c0" },
               { lbl:"WATCH",    val:SENSORS_3D.filter(s=>s.risk>=30&&s.risk<60).length,         col:"#f5a623" },
               { lbl:"CRITICAL", val:SENSORS_3D.filter(s=>s.risk>=60).length,                    col:"#ff3b5c" },
             ].map(({ lbl,val,col })=>(
-              <div key={lbl} style={{ background:"rgba(0,0,0,0.3)", borderRadius:8, padding:"10px 8px", textAlign:"center" }}>
-                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:28, fontWeight:800, color:col }}>{val}</div>
-                <div style={{ fontSize:8, color:col, letterSpacing:1.5 }}>{lbl}</div>
+              <div key={lbl} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 12 : 8, padding:isMobile ? "16px 12px" : "10px 8px", textAlign:"center" }}>
+                <div style={{ fontFamily:"'Outfit',sans-serif", fontSize:isMobile ? 36 : 28, fontWeight:800, color:col }}>{val}</div>
+                <div style={{ fontSize:isMobile ? 10 : 8, color:col, letterSpacing:1.5, marginTop:isMobile ? 6 : 0 }}>{lbl}</div>
               </div>
             ))}
           </div>
@@ -939,14 +999,14 @@ function FlightSelectPage({ onSelect, onLogout }) {
       </div>
 
       {/* Main content */}
-      <div style={{ flex:1, padding:isMobile ? "24px 16px 40px" : "52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
-        <div style={{ marginBottom:48, textAlign:"center" }}>
-          <div style={{ fontSize:10, color:"#00e5c0", letterSpacing:4, fontFamily:"'DM Mono',monospace", marginBottom:12 }}>SELECT FLIGHT · OPERATIONAL DASHBOARD</div>
-          <div style={{ fontSize:isMobile ? 28 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0" }}>Active Fleet Monitor</div>
-          <div style={{ fontSize:isMobile ? 12 : 14, color:"#555", marginTop:10, fontWeight:400 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
+      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+        <div style={{ marginBottom:isMobile ? 32 : 48, textAlign:"center" }}>
+          <div style={{ fontSize:isMobile ? 11 : 10, color:"#00e5c0", letterSpacing:isMobile ? 3 : 4, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 16 : 12 }}>SELECT FLIGHT · OPERATIONAL DASHBOARD</div>
+          <div style={{ fontSize:isMobile ? 32 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0", marginBottom:isMobile ? 12 : 0 }}>Active Fleet Monitor</div>
+          <div style={{ fontSize:isMobile ? 13 : 14, color:"#555", marginTop:isMobile ? 12 : 10, fontWeight:400, padding:isMobile ? "0 20px" : 0 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(2,1fr)", gap:20, maxWidth:1040, margin:"0 auto" }}>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(2,1fr)", gap:isMobile ? 24 : 20, maxWidth:1040, margin:"0 auto" }}>
           {FLIGHT_DETAILS.map((f,i)=>{
             const rc = RISK_COLOR(f.risk);
             const isHov = hovered===f.id;
@@ -956,7 +1016,7 @@ function FlightSelectPage({ onSelect, onLogout }) {
                 onMouseEnter={()=>setHovered(f.id)}
                 onMouseLeave={()=>setHovered(null)}
                 onClick={()=>!isArrived&&onSelect(f)}
-                style={{ background:isHov&&!isArrived?"rgba(0,229,192,0.04)":"rgba(255,255,255,0.02)", border:`1px solid ${isHov&&!isArrived?rc:"rgba(255,255,255,0.07)"}`, borderRadius:16, padding:28, cursor:isArrived?"default":"pointer", transition:"all .25s", animation:`fadeIn .4s ease ${i*0.1}s both`, position:"relative", overflow:"hidden" }}>
+                style={{ background:isHov&&!isArrived?"rgba(0,229,192,0.04)":"rgba(255,255,255,0.02)", border:`1px solid ${isHov&&!isArrived?rc:"rgba(255,255,255,0.07)"}`, borderRadius:isMobile ? 20 : 16, padding:isMobile ? 24 : 28, cursor:isArrived?"default":"pointer", transition:"all .25s", animation:`fadeIn .4s ease ${i*0.1}s both`, position:"relative", overflow:"hidden" }}>
                 {/* Top glow bar */}
                 <div style={{ position:"absolute", top:0, left:0, right:0, height:2, background:`linear-gradient(90deg,transparent,${rc},transparent)`, opacity:isHov?0.8:0.3, transition:"opacity .3s" }}/>
                 {/* Progress fill bg */}
@@ -964,70 +1024,70 @@ function FlightSelectPage({ onSelect, onLogout }) {
 
                 <div style={{ position:"relative" }}>
                   {/* Flight header */}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:isMobile ? 24 : 20 }}>
                     <div>
-                      <div style={{ fontSize:32, fontWeight:800, letterSpacing:2, color:"#e0e8f0", lineHeight:1 }}>{f.id}</div>
-                      <div style={{ fontSize:14, color:"#666", marginTop:6, fontWeight:500 }}>{f.from} → {f.to}</div>
+                      <div style={{ fontSize:isMobile ? 36 : 32, fontWeight:800, letterSpacing:2, color:"#e0e8f0", lineHeight:1 }}>{f.id}</div>
+                      <div style={{ fontSize:isMobile ? 15 : 14, color:"#666", marginTop:isMobile ? 8 : 6, fontWeight:500 }}>{f.from} → {f.to}</div>
                     </div>
                     <div style={{ textAlign:"right" }}>
-                      <div style={{ fontSize:9, background:`${rc}18`, border:`1px solid ${rc}40`, color:rc, padding:"4px 10px", borderRadius:5, letterSpacing:2, fontFamily:"'DM Mono',monospace", display:"inline-block" }}>
-                        {f.status==="EN ROUTE"&&<span style={{ width:6, height:6, borderRadius:"50%", background:rc, display:"inline-block", marginRight:5, animation:"pulse 1.4s infinite" }}/>}
+                      <div style={{ fontSize:isMobile ? 10 : 9, background:`${rc}18`, border:`1px solid ${rc}40`, color:rc, padding:isMobile ? "6px 12px" : "4px 10px", borderRadius:isMobile ? 8 : 5, letterSpacing:2, fontFamily:"'DM Mono',monospace", display:"inline-block" }}>
+                        {f.status==="EN ROUTE"&&<span style={{ width:isMobile ? 7 : 6, height:isMobile ? 7 : 6, borderRadius:"50%", background:rc, display:"inline-block", marginRight:5, animation:"pulse 1.4s infinite" }}/>}
                         {f.status}
                       </div>
                     </div>
                   </div>
 
                   {/* Aircraft + route info */}
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:20 }}>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:isMobile ? 10 : 12, marginBottom:isMobile ? 24 : 20 }}>
                     {[{l:"AIRCRAFT",v:f.aircraft},{l:"DISTANCE",v:f.distance},{l:"DURATION",v:f.duration}].map(({l,v})=>(
-                      <div key={l} style={{ background:"rgba(0,0,0,0.3)", borderRadius:8, padding:"10px 12px" }}>
-                        <div style={{ fontSize:8, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginBottom:4 }}>{l}</div>
-                        <div style={{ fontSize:12, color:"#ccc", fontWeight:600 }}>{v}</div>
+                      <div key={l} style={{ background:"rgba(0,0,0,0.3)", borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 10px" : "10px 12px" }}>
+                        <div style={{ fontSize:isMobile ? 9 : 8, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 6 : 4 }}>{l}</div>
+                        <div style={{ fontSize:isMobile ? 13 : 12, color:"#ccc", fontWeight:600 }}>{v}</div>
                       </div>
                     ))}
                   </div>
 
                   {/* Times */}
-                  <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 14 : 12, marginBottom:isMobile ? 24 : 20 }}>
                     <div style={{ textAlign:"center" }}>
-                      <div style={{ fontSize:18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.departure}</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>{f.from.toUpperCase().slice(0,3)}</div>
+                      <div style={{ fontSize:isMobile ? 20 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.departure}</div>
+                      <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 4 : 0 }}>{f.from.toUpperCase().slice(0,3)}</div>
                     </div>
-                    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:4 }}>
-                      <div style={{ width:"100%", height:1, background:"rgba(255,255,255,0.08)", position:"relative" }}>
-                        {f.progress>0&&f.progress<100&&<div style={{ position:"absolute", left:`${f.progress}%`, top:-4, width:8, height:8, borderRadius:"50%", background:rc, boxShadow:`0 0 8px ${rc}`, transform:"translateX(-50%)" }}/>}
-                        {f.progress>0&&<div style={{ position:"absolute", left:0, width:`${f.progress}%`, height:1, background:`linear-gradient(90deg,${rc}60,${rc})` }}/>}
+                    <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", gap:isMobile ? 6 : 4 }}>
+                      <div style={{ width:"100%", height:isMobile ? 2 : 1, background:"rgba(255,255,255,0.08)", position:"relative", borderRadius:1 }}>
+                        {f.progress>0&&f.progress<100&&<div style={{ position:"absolute", left:`${f.progress}%`, top:isMobile ? -5 : -4, width:isMobile ? 10 : 8, height:isMobile ? 10 : 8, borderRadius:"50%", background:rc, boxShadow:`0 0 8px ${rc}`, transform:"translateX(-50%)" }}/>}
+                        {f.progress>0&&<div style={{ position:"absolute", left:0, width:`${f.progress}%`, height:isMobile ? 2 : 1, background:`linear-gradient(90deg,${rc}60,${rc})`, borderRadius:1 }}/>}
                       </div>
-                      <div style={{ fontSize:8, color:"#444", fontFamily:"'DM Mono',monospace" }}>{f.altitude}</div>
+                      <div style={{ fontSize:isMobile ? 10 : 8, color:"#444", fontFamily:"'DM Mono',monospace" }}>{f.altitude}</div>
                     </div>
                     <div style={{ textAlign:"center" }}>
-                      <div style={{ fontSize:18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.arrival}</div>
-                      <div style={{ fontSize:9, color:"#555", letterSpacing:1 }}>{f.to.toUpperCase().slice(0,3)}</div>
+                      <div style={{ fontSize:isMobile ? 20 : 18, fontWeight:700, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{f.arrival}</div>
+                      <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, marginTop:isMobile ? 4 : 0 }}>{f.to.toUpperCase().slice(0,3)}</div>
                     </div>
                   </div>
 
                   {/* Stats row */}
-                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                    <div style={{ display:"flex", gap:16 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", flexWrap:isMobile ? "wrap" : "nowrap", gap:isMobile ? 12 : 0 }}>
+                    <div style={{ display:"flex", gap:isMobile ? 20 : 16 }}>
                       <div>
-                        <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>PAX</div>
-                        <div style={{ fontSize:13, color:"#ccc", fontWeight:600 }}>{f.passengers}</div>
+                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>PAX</div>
+                        <div style={{ fontSize:isMobile ? 15 : 13, color:"#ccc", fontWeight:600 }}>{f.passengers}</div>
                       </div>
                       {f.co2>0&&<div>
-                        <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>CO₂</div>
-                        <div style={{ fontSize:13, color:"#ccc", fontWeight:600 }}>{f.co2} t</div>
+                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>CO₂</div>
+                        <div style={{ fontSize:isMobile ? 15 : 13, color:"#ccc", fontWeight:600 }}>{f.co2} t</div>
                       </div>}
                       <div>
-                        <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>RISK</div>
-                        <div style={{ fontSize:13, color:rc, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{f.risk} <span style={{ fontSize:9, color:rc }}>{RISK_LABEL(f.risk)}</span></div>
+                        <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>RISK</div>
+                        <div style={{ fontSize:isMobile ? 15 : 13, color:rc, fontWeight:700, fontFamily:"'DM Mono',monospace" }}>{f.risk} <span style={{ fontSize:isMobile ? 10 : 9, color:rc }}>{RISK_LABEL(f.risk)}</span></div>
                       </div>
                     </div>
                     {!isArrived ? (
-                      <div style={{ background:`${rc}15`, border:`1px solid ${rc}35`, borderRadius:8, padding:"9px 20px", fontSize:11, color:rc, fontWeight:700, letterSpacing:2, transition:"all .2s", opacity:isHov?1:0.7 }}>
+                      <div style={{ background:`${rc}15`, border:`1px solid ${rc}35`, borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 24px" : "9px 20px", fontSize:isMobile ? 12 : 11, color:rc, fontWeight:700, letterSpacing:2, transition:"all .2s", opacity:isHov?1:0.7, minHeight:isMobile ? 44 : "auto", width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 8 : 0 }}>
                         OPEN DASHBOARD →
                       </div>
                     ) : (
-                      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:8, padding:"9px 20px", fontSize:11, color:"#444", letterSpacing:2 }}>
+                      <div style={{ background:"rgba(255,255,255,0.03)", border:"1px solid rgba(255,255,255,0.06)", borderRadius:isMobile ? 10 : 8, padding:isMobile ? "12px 24px" : "9px 20px", fontSize:isMobile ? 12 : 11, color:"#444", letterSpacing:2, width:isMobile ? "100%" : "auto", textAlign:isMobile ? "center" : "left", marginTop:isMobile ? 8 : 0 }}>
                         FLIGHT COMPLETE
                       </div>
                     )}
@@ -1039,11 +1099,11 @@ function FlightSelectPage({ onSelect, onLogout }) {
         </div>
 
         {/* Fleet summary row */}
-        <div style={{ maxWidth:1040, margin:"32px auto 0", display:"grid", gridTemplateColumns:isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:14 }}>
+        <div style={{ maxWidth:1040, margin:isMobile ? "40px auto 0" : "32px auto 0", display:"grid", gridTemplateColumns:isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:isMobile ? 16 : 14 }}>
           {[{l:"ACTIVE FLIGHTS",v:"2",c:"#00e5c0"},{l:"BOARDING",v:"1",c:"#f5a623"},{l:"COMPLETED TODAY",v:"1",c:"#555"},{l:"FLEET RISK AVG",v:"18",c:"#00e5c0"}].map(({l,v,c})=>(
-            <div key={l} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:10, padding:"16px 20px", textAlign:"center" }}>
-              <div style={{ fontSize:28, fontWeight:800, color:c }}>{v}</div>
-              <div style={{ fontSize:9, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginTop:4 }}>{l}</div>
+            <div key={l} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:isMobile ? 14 : 10, padding:isMobile ? "20px 16px" : "16px 20px", textAlign:"center" }}>
+              <div style={{ fontSize:isMobile ? 36 : 28, fontWeight:800, color:c }}>{v}</div>
+              <div style={{ fontSize:isMobile ? 10 : 9, color:"#555", letterSpacing:2, fontFamily:"'DM Mono',monospace", marginTop:isMobile ? 8 : 4 }}>{l}</div>
             </div>
           ))}
         </div>
@@ -1109,60 +1169,62 @@ function Dashboard({ flight, onBack }) {
       <div style={{ position:"fixed", inset:0, background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px)", pointerEvents:"none", zIndex:9999 }}/>
 
       {/* Header */}
-      <div style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", borderBottom:"1px solid rgba(0,229,192,0.12)", padding:isMobile ? "0 12px" : "0 28px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 50 : 58, position:"sticky", top:0, zIndex:100, flexWrap:"wrap", gap:8 }}>
-        <div style={{ display:"flex", alignItems:"center", gap:16 }}>
-          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:7, padding:"6px 12px", cursor:"pointer", fontSize:10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
+      <div style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", borderBottom:"1px solid rgba(0,229,192,0.12)", padding:isMobile ? "0 16px" : "0 28px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? "auto" : 58, minHeight:isMobile ? 60 : 58, position:"sticky", top:0, zIndex:100, flexWrap:"wrap", gap:isMobile ? 12 : 8, paddingTop:isMobile ? 12 : 0, paddingBottom:isMobile ? 12 : 0 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 16, flexWrap:"wrap" }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:isMobile ? 8 : 7, padding:isMobile ? "10px 14px" : "6px 12px", cursor:"pointer", fontSize:isMobile ? 11 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6, minHeight:isMobile ? 44 : "auto" }}>
             ← FLIGHTS
           </button>
-          <div style={{ width:1, height:28, background:"rgba(255,255,255,0.08)" }}/>
-          <div style={{ width:30, height:30, borderRadius:7, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:15 }}>✈</div>
+          {!isMobile && <div style={{ width:1, height:28, background:"rgba(255,255,255,0.08)" }}/>}
+          <div style={{ width:isMobile ? 36 : 30, height:isMobile ? 36 : 30, borderRadius:isMobile ? 9 : 7, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 15 }}>✈</div>
           <div>
-            <div style={{ fontSize:13, fontWeight:800, letterSpacing:2 }}>
+            <div style={{ fontSize:isMobile ? 15 : 13, fontWeight:800, letterSpacing:2 }}>
               {flight?.id} · {flight?.route}
-              <span style={{ fontSize:10, color:"#555", marginLeft:12, fontWeight:400 }}>{flight?.aircraft}</span>
+              {!isMobile && <span style={{ fontSize:10, color:"#555", marginLeft:12, fontWeight:400 }}>{flight?.aircraft}</span>}
             </div>
-            <div style={{ fontSize:9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · FLIGHT INTELLIGENCE</div>
+            <div style={{ fontSize:isMobile ? 10 : 9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · FLIGHT INTELLIGENCE</div>
           </div>
         </div>
-        <div style={{ display:"flex", alignItems:"center", gap:20 }}>
-          {flight&&(
-            <div style={{ display:"flex", gap:16 }}>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>STATUS</div>
-                <div style={{ fontSize:10, color:RISK_COLOR(flight.risk), fontFamily:"'DM Mono',monospace" }}>
-                  <LivePulse color={RISK_COLOR(flight.risk)}/>{flight.status}
+        {!isMobile && (
+          <div style={{ display:"flex", alignItems:"center", gap:20 }}>
+            {flight&&(
+              <div style={{ display:"flex", gap:16 }}>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>STATUS</div>
+                  <div style={{ fontSize:10, color:RISK_COLOR(flight.risk), fontFamily:"'DM Mono',monospace" }}>
+                    <LivePulse color={RISK_COLOR(flight.risk)}/>{flight.status}
+                  </div>
+                </div>
+                <div style={{ textAlign:"right" }}>
+                  <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>FLEET RISK</div>
+                  <div style={{ fontSize:10, color:RISK_COLOR(flight.risk), fontFamily:"'DM Mono',monospace" }}>{flight.risk} — {RISK_LABEL(flight.risk)}</div>
                 </div>
               </div>
-              <div style={{ textAlign:"right" }}>
-                <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>FLEET RISK</div>
-                <div style={{ fontSize:10, color:RISK_COLOR(flight.risk), fontFamily:"'DM Mono',monospace" }}>{flight.risk} — {RISK_LABEL(flight.risk)}</div>
-              </div>
+            )}
+            <div style={{ textAlign:"right" }}>
+              <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>SYSTEM TIME</div>
+              <div style={{ fontSize:10, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{nowStr}</div>
             </div>
-          )}
-          <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:9, color:"#555", letterSpacing:1, fontFamily:"'DM Mono',monospace" }}>SYSTEM TIME</div>
-            <div style={{ fontSize:10, color:"#e0e8f0", fontFamily:"'DM Mono',monospace" }}>{nowStr}</div>
+            <div style={{ display:"flex", gap:4 }}>
+              {["🔒 SECURE","📋 AUDIT ON"].map(l=>(
+                <span key={l} style={{ fontSize:9, background:"rgba(0,229,192,0.08)", border:"1px solid rgba(0,229,192,0.2)", color:"#00e5c0", padding:"3px 8px", borderRadius:4, letterSpacing:1 }}>{l}</span>
+              ))}
+            </div>
           </div>
-          <div style={{ display:"flex", gap:4 }}>
-            {["🔒 SECURE","📋 AUDIT ON"].map(l=>(
-              <span key={l} style={{ fontSize:9, background:"rgba(0,229,192,0.08)", border:"1px solid rgba(0,229,192,0.2)", color:"#00e5c0", padding:"3px 8px", borderRadius:4, letterSpacing:1 }}>{l}</span>
-            ))}
-          </div>
-        </div>
+        )}
       </div>
 
       {/* Nav */}
-      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:isMobile ? "0 12px" : "0 28px", background:"rgba(0,0,0,0.3)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
+      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:isMobile ? "0 16px" : "0 28px", background:"rgba(0,0,0,0.3)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
         {tabs.map(t=>(
           <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)}
-            style={{ padding:"14px 20px", fontSize:10, letterSpacing:2.5, color:tab===t.id?"#00e5c0":"#555", borderBottom:tab===t.id?"2px solid #00e5c0":"2px solid transparent", fontWeight:tab===t.id?700:400, position:"relative" }}>
-            {t.badge&&<span style={{ position:"absolute", top:8, right:2, fontSize:7, background:"#00e5c0", color:"#000", borderRadius:3, padding:"1px 4px", fontWeight:800 }}>{t.badge}</span>}
+            style={{ padding:isMobile ? "16px 18px" : "14px 20px", fontSize:isMobile ? 11 : 10, letterSpacing:isMobile ? 2 : 2.5, color:tab===t.id?"#00e5c0":"#555", borderBottom:tab===t.id?"2px solid #00e5c0":"2px solid transparent", fontWeight:tab===t.id?700:400, position:"relative", minHeight:isMobile ? 52 : "auto", whiteSpace:"nowrap" }}>
+            {t.badge&&<span style={{ position:"absolute", top:isMobile ? 10 : 8, right:2, fontSize:isMobile ? 8 : 7, background:"#00e5c0", color:"#000", borderRadius:3, padding:"1px 4px", fontWeight:800 }}>{t.badge}</span>}
             {t.label}
           </button>
         ))}
       </div>
 
-      <div style={{ padding:isMobile ? "16px 12px" : "24px 28px", animation:"fadeIn .3s ease", paddingBottom:60 }}>
+      <div style={{ padding:isMobile ? "24px 20px" : "24px 28px", animation:"fadeIn .3s ease", paddingBottom:isMobile ? 80 : 60 }}>
 
         {tab==="sensor3d"&&<AircraftViewer3D sensors={fd.sensors3d}/>}
 

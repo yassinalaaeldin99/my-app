@@ -57,6 +57,17 @@ body {
     padding: 0;
     margin: 0;
   }
+  
+  /* Reduce animations for better performance */
+  * {
+    animation-duration: 0.3s !important;
+    transition-duration: 0.2s !important;
+  }
+  
+  /* Disable expensive effects */
+  * {
+    will-change: auto !important;
+  }
 }
 
 /* Hide scrollbar for tab navigation on mobile */
