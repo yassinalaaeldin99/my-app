@@ -847,24 +847,26 @@ function AircraftViewer3D({ sensors }) {
 }
 
 // ─── Login History Storage ────────────────────────────────────────────────────
-function saveLoginHistory(name) {
+function saveLoginHistory(name, isAdmin = false) {
+  const now = new Date();
   const loginEntry = {
     name,
-    timestamp: new Date().toISOString(),
-    date: new Date().toLocaleDateString(),
-    time: new Date().toLocaleTimeString()
+    isAdmin,
+    timestamp: now.toISOString(),
+    date: now.toLocaleDateString(),
+    time: now.toLocaleTimeString(),
   };
-  
-  const history = JSON.parse(localStorage.getItem('aerosense_login_history') || '[]');
+
+  const history = JSON.parse(localStorage.getItem("aerosense_login_history") || "[]");
   history.unshift(loginEntry); // Add to beginning
   // Keep only last 100 entries
   if (history.length > 100) {
     history.pop();
   }
-  localStorage.setItem('aerosense_login_history', JSON.stringify(history));
-  
+  localStorage.setItem("aerosense_login_history", JSON.stringify(history));
+
   // Also save current user
-  localStorage.setItem('aerosense_current_user', JSON.stringify(loginEntry));
+  localStorage.setItem("aerosense_current_user", JSON.stringify(loginEntry));
 }
 
 function getLoginHistory() {
@@ -894,19 +896,23 @@ function LoginPage({ onSuccess }) {
   },[]);
 
   const attempt = () => {
-    if (!name.trim()) {
+    const trimmedName = name.trim();
+    if (!trimmedName) {
       setError(true);
       setShake(true);
       setTimeout(()=>{ setShake(false); setError(false); },700);
       return;
     }
-    
-    if (pw === "admin001") {
+
+    const isAdminLogin = trimmedName.toUpperCase() === "ADMIN" && pw === "sufian001";
+    const isUserLogin = pw === "admin001" && !isAdminLogin;
+
+    if (isAdminLogin || isUserLogin) {
       setLoading(true);
       // Save login history
-      saveLoginHistory(name.trim());
+      saveLoginHistory(trimmedName, isAdminLogin);
       setTimeout(() => {
-        onSuccess(name.trim());
+        onSuccess(trimmedName, isAdminLogin);
       }, 1200);
     } else {
       setError(true); setShake(true);
@@ -1048,8 +1054,42 @@ function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory }) {
           </div>
           {!isMobile && <div style={{ width:1, height:32, background:"rgba(255,255,255,0.08)" }}/>}
           <div style={{ display:"flex", gap:isMobile ? 8 : 12, flexWrap:"wrap" }}>
-            <button onClick={onViewHistory} style={{ background:"rgba(0,229,192,0.08)", border:"1px solid rgba(0,229,192,0.2)", color:"#00e5c0", borderRadius:7, padding:isMobile ? "8px 12px" : "6px 14px", cursor:"pointer", fontSize:isMobile ? 10 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, minHeight:isMobile ? 44 : "auto" }}>📋 HISTORY</button>
-            <button onClick={onLogout} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.08)", color:"#666", borderRadius:7, padding:isMobile ? "8px 12px" : "6px 14px", cursor:"pointer", fontSize:isMobile ? 10 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, minHeight:isMobile ? 44 : "auto" }}>LOGOUT</button>
+            {currentUser?.isAdmin && (
+              <button
+                onClick={onViewHistory}
+                style={{
+                  background: "rgba(0,229,192,0.08)",
+                  border: "1px solid rgba(0,229,192,0.2)",
+                  color: "#00e5c0",
+                  borderRadius: 7,
+                  padding: isMobile ? "8px 12px" : "6px 14px",
+                  cursor: "pointer",
+                  fontSize: isMobile ? 10 : 10,
+                  fontFamily: "'Outfit',sans-serif",
+                  letterSpacing: 1,
+                  minHeight: isMobile ? 44 : "auto",
+                }}
+              >
+                📋 HISTORY
+              </button>
+            )}
+            <button
+              onClick={onLogout}
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "#666",
+                borderRadius: 7,
+                padding: isMobile ? "8px 12px" : "6px 14px",
+                cursor: "pointer",
+                fontSize: isMobile ? 10 : 10,
+                fontFamily: "'Outfit',sans-serif",
+                letterSpacing: 1,
+                minHeight: isMobile ? 44 : "auto",
+              }}
+            >
+              LOGOUT
+            </button>
           </div>
         </div>
       </div>
@@ -1265,10 +1305,32 @@ export default function AviationAI() {
 
   return (
     <>
-      {page==="login"&&<LoginPage onSuccess={(name) => { setCurrentUser({ name, timestamp: new Date().toISOString() }); setPage("select"); }}/>}
-      {page==="select"&&<FlightSelectPage currentUser={currentUser} onSelect={f=>{ setActiveFlight(f); setPage("dashboard"); }} onLogout={()=>{ setCurrentUser(null); localStorage.removeItem('aerosense_current_user'); setPage("login"); }} onViewHistory={()=>setPage("history")}/>}
-      {page==="dashboard"&&<Dashboard flight={activeFlight} onBack={()=>setPage("select")}/>}
-      {page==="history"&&<LoginHistoryPage onBack={()=>setPage("select")}/>}
+      {page === "login" && (
+        <LoginPage
+          onSuccess={(name, isAdmin) => {
+            const user = { name, isAdmin, timestamp: new Date().toISOString() };
+            setCurrentUser(user);
+            setPage(isAdmin ? "history" : "select");
+          }}
+        />
+      )}
+      {page === "select" && (
+        <FlightSelectPage
+          currentUser={currentUser}
+          onSelect={(f) => {
+            setActiveFlight(f);
+            setPage("dashboard");
+          }}
+          onLogout={() => {
+            setCurrentUser(null);
+            localStorage.removeItem("aerosense_current_user");
+            setPage("login");
+          }}
+          onViewHistory={() => currentUser?.isAdmin && setPage("history")}
+        />
+      )}
+      {page === "dashboard" && <Dashboard flight={activeFlight} onBack={() => setPage("select")} />}
+      {page === "history" && <LoginHistoryPage onBack={() => setPage("select")} />}
     </>
   );
 }
