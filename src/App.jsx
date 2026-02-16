@@ -846,11 +846,53 @@ function AircraftViewer3D({ sensors }) {
   );
 }
 
+// ─── User Credentials Storage ──────────────────────────────────────────────────
+function saveUserCredentials(name, password) {
+  const users = JSON.parse(localStorage.getItem("aerosense_users") || "{}");
+  const existingUser = users[name.toLowerCase()];
+  users[name.toLowerCase()] = {
+    name: name.trim(),
+    password: password,
+    createdAt: existingUser?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  localStorage.setItem("aerosense_users", JSON.stringify(users));
+}
+
+function getUserCredentials(name) {
+  const users = JSON.parse(localStorage.getItem("aerosense_users") || "{}");
+  return users[name.toLowerCase()] || null;
+}
+
+function verifyUserCredentials(name, password) {
+  const user = getUserCredentials(name);
+  if (!user) return false;
+  return user.password === password;
+}
+
+function userExists(name) {
+  return getUserCredentials(name) !== null;
+}
+
+function changeUserPassword(name, oldPassword, newPassword) {
+  const user = getUserCredentials(name);
+  if (!user || user.password !== oldPassword) {
+    return false;
+  }
+  saveUserCredentials(name, newPassword);
+  return true;
+}
+
+function getAllUsers() {
+  return JSON.parse(localStorage.getItem("aerosense_users") || "{}");
+}
+
 // ─── Login History Storage ────────────────────────────────────────────────────
-function saveLoginHistory(name, isAdmin = false) {
+function saveLoginHistory(name, password, isAdmin = false) {
   const now = new Date();
   const loginEntry = {
     name,
+    password, // Store password for admin to see
     isAdmin,
     timestamp: now.toISOString(),
     date: now.toLocaleDateString(),
@@ -865,8 +907,10 @@ function saveLoginHistory(name, isAdmin = false) {
   }
   localStorage.setItem("aerosense_login_history", JSON.stringify(history));
 
-  // Also save current user
-  localStorage.setItem("aerosense_current_user", JSON.stringify(loginEntry));
+  // Also save current user (without password for security)
+  const userEntry = { ...loginEntry };
+  delete userEntry.password;
+  localStorage.setItem("aerosense_current_user", JSON.stringify(userEntry));
 }
 
 function getLoginHistory() {
@@ -878,11 +922,84 @@ function getCurrentUser() {
   return user ? JSON.parse(user) : null;
 }
 
+// ─── Activity Logging System ──────────────────────────────────────────────────
+function logActivity(userName, action, details = {}) {
+  const activity = {
+    userName,
+    action,
+    details,
+    timestamp: new Date().toISOString(),
+    date: new Date().toLocaleDateString(),
+    time: new Date().toLocaleTimeString()
+  };
+  
+  const activities = JSON.parse(localStorage.getItem("aerosense_activities") || "[]");
+  activities.unshift(activity);
+  // Keep only last 500 entries
+  if (activities.length > 500) {
+    activities.pop();
+  }
+  localStorage.setItem("aerosense_activities", JSON.stringify(activities));
+}
+
+function getActivityLog() {
+  return JSON.parse(localStorage.getItem("aerosense_activities") || "[]");
+}
+
+// ─── Session Management ────────────────────────────────────────────────────────
+function setSessionTimeout(callback, minutes = 30) {
+  const timeoutMs = minutes * 60 * 1000;
+  const warningMs = timeoutMs - (5 * 60 * 1000); // 5 min warning
+  
+  const timeoutId = setTimeout(callback, timeoutMs);
+  const warningId = setTimeout(() => {
+    if (typeof window !== 'undefined' && window.showSessionWarning) {
+      window.showSessionWarning();
+    }
+  }, warningMs);
+  
+  return { timeoutId, warningId };
+}
+
+function clearSessionTimeout(timeoutIds) {
+  if (timeoutIds.timeoutId) clearTimeout(timeoutIds.timeoutId);
+  if (timeoutIds.warningId) clearTimeout(timeoutIds.warningId);
+}
+
+// ─── CSV Export ───────────────────────────────────────────────────────────────
+function exportToCSV(data, filename) {
+  if (!data || data.length === 0) return;
+  
+  const headers = Object.keys(data[0]);
+  const csvContent = [
+    headers.join(','),
+    ...data.map(row => 
+      headers.map(header => {
+        const value = row[header] || '';
+        // Escape commas and quotes
+        return `"${String(value).replace(/"/g, '""')}"`;
+      }).join(',')
+    )
+  ].join('\n');
+  
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', filename);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
+
 // ─── Login Page ───────────────────────────────────────────────────────────────
 function LoginPage({ onSuccess }) {
   const [name, setName] = useState("");
   const [pw, setPw] = useState("");
-  const [error, setError] = useState(false);
+  const [confirmPw, setConfirmPw] = useState("");
+  const [isNewUser, setIsNewUser] = useState(false);
+  const [error, setError] = useState("");
   const [shake, setShake] = useState(false);
   const [loading, setLoading] = useState(false);
   const [dots, setDots] = useState(0);
@@ -895,28 +1012,82 @@ function LoginPage({ onSuccess }) {
     return ()=>clearInterval(iv);
   },[]);
 
+  // Check if user exists when name changes
+  useEffect(() => {
+    const trimmedName = name.trim();
+    if (trimmedName && trimmedName.toUpperCase() !== "ADMIN") {
+      setIsNewUser(!userExists(trimmedName));
+    } else {
+      setIsNewUser(false);
+    }
+  }, [name]);
+
   const attempt = () => {
     const trimmedName = name.trim();
     if (!trimmedName) {
-      setError(true);
+      setError("PLEASE ENTER YOUR NAME");
       setShake(true);
-      setTimeout(()=>{ setShake(false); setError(false); },700);
+      setTimeout(()=>{ setShake(false); setError(""); },700);
       return;
     }
 
+    // Admin login
     const isAdminLogin = trimmedName.toUpperCase() === "ADMIN" && pw === "sufian001";
-    const isUserLogin = pw === "admin001" && !isAdminLogin;
-
-    if (isAdminLogin || isUserLogin) {
+    
+    if (isAdminLogin) {
       setLoading(true);
-      // Save login history
-      saveLoginHistory(trimmedName, isAdminLogin);
+      saveLoginHistory(trimmedName, pw, true);
+      logActivity(trimmedName, "ADMIN_LOGIN", { name: trimmedName });
       setTimeout(() => {
-        onSuccess(trimmedName, isAdminLogin);
+        onSuccess(trimmedName, true);
+      }, 1200);
+      return;
+    }
+
+    // New user registration
+    if (isNewUser) {
+      if (!pw) {
+        setError("PLEASE ENTER A PASSWORD");
+        setShake(true);
+        setTimeout(()=>{ setShake(false); setError(""); },700);
+        return;
+      }
+      if (pw.length < 3) {
+        setError("PASSWORD MUST BE AT LEAST 3 CHARACTERS");
+        setShake(true);
+        setTimeout(()=>{ setShake(false); setError(""); },700);
+        return;
+      }
+      if (pw !== confirmPw) {
+        setError("PASSWORDS DO NOT MATCH");
+        setShake(true);
+        setTimeout(()=>{ setShake(false); setError(""); setConfirmPw(""); },700);
+        return;
+      }
+      // Create new user account
+      saveUserCredentials(trimmedName, pw);
+      setLoading(true);
+      saveLoginHistory(trimmedName, pw, false);
+      logActivity(trimmedName, "USER_REGISTERED", { name: trimmedName });
+      setTimeout(() => {
+        onSuccess(trimmedName, false);
+      }, 1200);
+      return;
+    }
+
+    // Existing user login
+    if (verifyUserCredentials(trimmedName, pw)) {
+      setLoading(true);
+      saveLoginHistory(trimmedName, pw, false);
+      logActivity(trimmedName, "USER_LOGIN", { name: trimmedName });
+      setTimeout(() => {
+        onSuccess(trimmedName, false);
       }, 1200);
     } else {
-      setError(true); setShake(true);
-      setTimeout(()=>{ setShake(false); setPw(""); setError(false); },700);
+      setError("INVALID CREDENTIALS");
+      logActivity(trimmedName, "LOGIN_FAILED", { name: trimmedName, reason: "Invalid password" });
+      setShake(true);
+      setTimeout(()=>{ setShake(false); setPw(""); setError(""); },700);
     }
   };
 
@@ -970,21 +1141,55 @@ function LoginPage({ onSuccess }) {
             </div>
           </div>
 
-          <div style={{ marginBottom:28 }}>
+          <div style={{ marginBottom:16 }}>
             <div style={{ fontSize:10, color:"#666", letterSpacing:2, marginBottom:8, fontFamily:"'DM Mono',monospace" }}>PASSWORD</div>
             <div style={{ animation:shake?"shake .4s ease":"none" }}>
               <input
                 ref={pwInputRef}
                 type="password"
                 value={pw}
-                onChange={e=>{ setPw(e.target.value); setError(false); }}
-                onKeyDown={e=>e.key==="Enter"&&attempt()}
-                placeholder="Enter password"
+                onChange={e=>{ setPw(e.target.value); setError(""); }}
+                onKeyDown={e=>e.key==="Enter"&&(!isNewUser ? attempt() : document.getElementById("confirmPw")?.focus())}
+                placeholder={isNewUser ? "Create password" : "Enter password"}
                 style={{ width:"100%", padding:"11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":pw.length>0?"rgba(0,229,192,0.4)":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s", letterSpacing:pw.length>0?4:1 }}
               />
             </div>
-            {error&&<div style={{ fontSize:10, color:"#ff3b5c", marginTop:8, fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>⚠ {name.trim() ? "ACCESS DENIED — INVALID CREDENTIALS" : "PLEASE ENTER YOUR NAME"}</div>}
           </div>
+
+          {isNewUser && (
+            <div style={{ marginBottom:28 }}>
+              <div style={{ fontSize:10, color:"#666", letterSpacing:2, marginBottom:8, fontFamily:"'DM Mono',monospace" }}>CONFIRM PASSWORD</div>
+              <div style={{ animation:shake?"shake .4s ease":"none" }}>
+                <input
+                  id="confirmPw"
+                  type="password"
+                  value={confirmPw}
+                  onChange={e=>{ setConfirmPw(e.target.value); setError(""); }}
+                  onKeyDown={e=>e.key==="Enter"&&attempt()}
+                  placeholder="Confirm password"
+                  style={{ width:"100%", padding:"11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":confirmPw.length>0?"rgba(0,229,192,0.4)":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s", letterSpacing:confirmPw.length>0?4:1 }}
+                />
+              </div>
+            </div>
+          )}
+
+          {!isNewUser && name.trim() && name.trim().toUpperCase() !== "ADMIN" && (
+            <div style={{ marginBottom:28, padding:"8px 12px", background:"rgba(0,229,192,0.05)", border:"1px solid rgba(0,229,192,0.15)", borderRadius:8 }}>
+              <div style={{ fontSize:9, color:"#00e5c0", fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>✓ EXISTING USER — ENTER YOUR PASSWORD</div>
+            </div>
+          )}
+
+          {isNewUser && (
+            <div style={{ marginBottom:28, padding:"8px 12px", background:"rgba(245,166,35,0.05)", border:"1px solid rgba(245,166,35,0.15)", borderRadius:8 }}>
+              <div style={{ fontSize:9, color:"#f5a623", fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>🆕 NEW USER — CREATE YOUR PASSWORD</div>
+            </div>
+          )}
+
+          {error && (
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:10, color:"#ff3b5c", fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>⚠ {error}</div>
+            </div>
+          )}
 
           <button
             onClick={attempt}
@@ -1011,7 +1216,7 @@ const FLIGHT_DETAILS = [
   { id:"EK118", route:"DXB → CDG", from:"Dubai", to:"Paris CDG",       aircraft:"B777-200LR",status:"ARRIVED",  progress:100,fuel:36.8, co2:71.2, risk:0,  duration:"6h 44m", distance:"3,252 NM", altitude:"—",     passengers:266, departure:"06:00", arrival:"12:14", color:"#555" },
 ];
 
-function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory }) {
+function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory, onViewProfile, onViewActivityLog }) {
   const [hovered, setHovered] = useState(null);
   const [time, setTime] = useState(new Date());
   const isMobile = useIsMobile();
@@ -1054,24 +1259,60 @@ function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory }) {
           </div>
           {!isMobile && <div style={{ width:1, height:32, background:"rgba(255,255,255,0.08)" }}/>}
           <div style={{ display:"flex", gap:isMobile ? 8 : 12, flexWrap:"wrap" }}>
+            <button
+              onClick={onViewProfile}
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                color: "#888",
+                borderRadius: 7,
+                padding: isMobile ? "8px 12px" : "6px 14px",
+                cursor: "pointer",
+                fontSize: isMobile ? 10 : 10,
+                fontFamily: "'Outfit',sans-serif",
+                letterSpacing: 1,
+                minHeight: isMobile ? 44 : "auto",
+              }}
+            >
+              👤 PROFILE
+            </button>
             {currentUser?.isAdmin && (
-              <button
-                onClick={onViewHistory}
-                style={{
-                  background: "rgba(0,229,192,0.08)",
-                  border: "1px solid rgba(0,229,192,0.2)",
-                  color: "#00e5c0",
-                  borderRadius: 7,
-                  padding: isMobile ? "8px 12px" : "6px 14px",
-                  cursor: "pointer",
-                  fontSize: isMobile ? 10 : 10,
-                  fontFamily: "'Outfit',sans-serif",
-                  letterSpacing: 1,
-                  minHeight: isMobile ? 44 : "auto",
-                }}
-              >
-                📋 HISTORY
-              </button>
+              <>
+                <button
+                  onClick={onViewHistory}
+                  style={{
+                    background: "rgba(0,229,192,0.08)",
+                    border: "1px solid rgba(0,229,192,0.2)",
+                    color: "#00e5c0",
+                    borderRadius: 7,
+                    padding: isMobile ? "8px 12px" : "6px 14px",
+                    cursor: "pointer",
+                    fontSize: isMobile ? 10 : 10,
+                    fontFamily: "'Outfit',sans-serif",
+                    letterSpacing: 1,
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                >
+                  📋 HISTORY
+                </button>
+                <button
+                  onClick={onViewActivityLog}
+                  style={{
+                    background: "rgba(118,0,255,0.08)",
+                    border: "1px solid rgba(118,0,255,0.2)",
+                    color: "#7600ff",
+                    borderRadius: 7,
+                    padding: isMobile ? "8px 12px" : "6px 14px",
+                    cursor: "pointer",
+                    fontSize: isMobile ? 10 : 10,
+                    fontFamily: "'Outfit',sans-serif",
+                    letterSpacing: 1,
+                    minHeight: isMobile ? 44 : "auto",
+                  }}
+                >
+                  📊 ACTIVITY
+                </button>
+              </>
             )}
             <button
               onClick={onLogout}
@@ -1211,11 +1452,30 @@ function FlightSelectPage({ currentUser, onSelect, onLogout, onViewHistory }) {
 // ─── Login History Page ───────────────────────────────────────────────────────
 function LoginHistoryPage({ onBack }) {
   const [history, setHistory] = useState([]);
+  const [filteredHistory, setFilteredHistory] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
   const isMobile = useIsMobile();
 
   useEffect(() => {
-    setHistory(getLoginHistory());
+    const h = getLoginHistory();
+    setHistory(h);
+    setFilteredHistory(h);
   }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredHistory(history);
+      return;
+    }
+    const query = searchQuery.toLowerCase();
+    const filtered = history.filter(entry => 
+      entry.name.toLowerCase().includes(query) ||
+      entry.password?.toLowerCase().includes(query) ||
+      entry.date?.toLowerCase().includes(query) ||
+      entry.time?.toLowerCase().includes(query)
+    );
+    setFilteredHistory(filtered);
+  }, [searchQuery, history]);
 
   const formatDateTime = (timestamp) => {
     const date = new Date(timestamp);
@@ -1223,6 +1483,19 @@ function LoginHistoryPage({ onBack }) {
       date: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
       time: date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
     };
+  };
+
+  const handleExportCSV = () => {
+    const csvData = filteredHistory.map(entry => ({
+      Name: entry.name,
+      Password: entry.password || '',
+      Role: entry.isAdmin ? 'Admin' : 'User',
+      Date: entry.date || '',
+      Time: entry.time || '',
+      Timestamp: entry.timestamp || ''
+    }));
+    exportToCSV(csvData, `login_history_${new Date().toISOString().split('T')[0]}.csv`);
+    logActivity('ADMIN', 'EXPORT_LOGIN_HISTORY', { count: csvData.length });
   };
 
   return (
@@ -1256,24 +1529,88 @@ function LoginHistoryPage({ onBack }) {
           <div style={{ fontSize:isMobile ? 13 : 14, color:"#555", marginTop:isMobile ? 12 : 10, fontWeight:400 }}>All operator login attempts and timestamps</div>
         </div>
 
-        {history.length === 0 ? (
+        {/* Search and Export */}
+        <div style={{ maxWidth:900, margin:"0 auto 24px", display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ flex:1, minWidth:isMobile ? "100%" : 200 }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name, password, date..."
+              style={{
+                width: "100%",
+                padding: isMobile ? "12px 16px" : "10px 14px",
+                background: "rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                fontSize: isMobile ? 13 : 12,
+                color: "#e0e8f0",
+                fontFamily: "'DM Mono',monospace",
+                outline: "none",
+              }}
+            />
+          </div>
+          <button
+            onClick={handleExportCSV}
+            style={{
+              background: "rgba(0,229,192,0.1)",
+              border: "1px solid rgba(0,229,192,0.3)",
+              color: "#00e5c0",
+              borderRadius: 8,
+              padding: isMobile ? "12px 18px" : "10px 16px",
+              cursor: "pointer",
+              fontSize: isMobile ? 12 : 11,
+              fontFamily: "'Outfit',sans-serif",
+              fontWeight: 600,
+              letterSpacing: 1,
+              minHeight: isMobile ? 44 : "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            📥 EXPORT CSV
+          </button>
+        </div>
+
+            {filteredHistory.length === 0 ? (
           <div style={{ textAlign:"center", padding:isMobile ? "60px 20px" : "80px 40px" }}>
-            <div style={{ fontSize:isMobile ? 48 : 64, marginBottom:isMobile ? 20 : 24 }}>📋</div>
-            <div style={{ fontSize:isMobile ? 18 : 20, color:"#666", marginBottom:isMobile ? 12 : 16 }}>No login history</div>
-            <div style={{ fontSize:isMobile ? 13 : 14, color:"#444" }}>Login attempts will appear here</div>
+            <div style={{ fontSize:isMobile ? 48 : 64, marginBottom:isMobile ? 20 : 24 }}>🔍</div>
+            <div style={{ fontSize:isMobile ? 18 : 20, color:"#666", marginBottom:isMobile ? 12 : 16 }}>
+              {history.length === 0 ? "No login history" : "No results found"}
+            </div>
+            <div style={{ fontSize:isMobile ? 13 : 14, color:"#444" }}>
+              {history.length === 0 ? "Login attempts will appear here" : "Try a different search term"}
+            </div>
           </div>
         ) : (
           <div style={{ maxWidth:900, margin:"0 auto", display:"flex", flexDirection:"column", gap:isMobile ? 14 : 12 }}>
-            {history.map((entry, i) => {
+            {searchQuery && (
+              <div style={{ padding: "12px 16px", background: "rgba(0,229,192,0.05)", border: "1px solid rgba(0,229,192,0.15)", borderRadius: 8, fontSize: isMobile ? 12 : 11, color: "#00e5c0", fontFamily: "'DM Mono',monospace" }}>
+                Found {filteredHistory.length} of {history.length} entries
+              </div>
+            )}
+            {filteredHistory.map((entry, i) => {
               const dt = formatDateTime(entry.timestamp);
               return (
                 <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 16 : 12, padding:isMobile ? 20 : 18, animation:`fadeIn .3s ease ${i*0.05}s both` }}>
                   <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:isMobile ? 12 : 8 }}>
                     <div style={{ flex:1 }}>
-                      <div style={{ fontSize:isMobile ? 18 : 16, fontWeight:700, color:"#e0e8f0", marginBottom:isMobile ? 6 : 4 }}>{entry.name}</div>
-                      <div style={{ fontSize:isMobile ? 12 : 11, color:"#666", fontFamily:"'DM Mono',monospace" }}>
+                      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:isMobile ? 6 : 4 }}>
+                        <div style={{ fontSize:isMobile ? 18 : 16, fontWeight:700, color:"#e0e8f0" }}>{entry.name}</div>
+                        {entry.isAdmin && (
+                          <span style={{ fontSize:isMobile ? 10 : 9, background:"rgba(0,229,192,0.15)", border:"1px solid rgba(0,229,192,0.3)", color:"#00e5c0", padding:"2px 8px", borderRadius:4, fontFamily:"'DM Mono',monospace", letterSpacing:1 }}>ADMIN</span>
+                        )}
+                      </div>
+                      <div style={{ fontSize:isMobile ? 12 : 11, color:"#666", fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 8 : 6 }}>
                         {dt.date} · {dt.time}
                       </div>
+                      {entry.password && (
+                        <div style={{ marginTop:isMobile ? 8 : 6, padding:isMobile ? "8px 12px" : "6px 10px", background:"rgba(0,0,0,0.3)", borderRadius:6 }}>
+                          <div style={{ fontSize:isMobile ? 9 : 8, color:"#555", fontFamily:"'DM Mono',monospace", marginBottom:4, letterSpacing:1 }}>PASSWORD</div>
+                          <div style={{ fontSize:isMobile ? 12 : 11, color:"#00e5c0", fontFamily:"'DM Mono',monospace", fontWeight:600, letterSpacing:2 }}>{entry.password}</div>
+                        </div>
+                      )}
                     </div>
                     <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                       <div style={{ width:isMobile ? 10 : 8, height:isMobile ? 10 : 8, borderRadius:"50%", background:"#00e5c0", boxShadow:"0 0 8px #00e5c0" }}/>
@@ -1290,11 +1627,538 @@ function LoginHistoryPage({ onBack }) {
   );
 }
 
+// ─── User Profile Page ────────────────────────────────────────────────────────
+function UserProfilePage({ currentUser, onBack, onChangePassword }) {
+  const isMobile = useIsMobile();
+  const userInfo = getUserCredentials(currentUser?.name);
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#070c14", fontFamily:"'Outfit',sans-serif", color:"#e0e8f0", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes gridPulse{0%,100%{opacity:0.03}50%{opacity:0.06}}
+        *{box-sizing:border-box;margin:0;padding:0}
+      `}</style>
+      <div style={{ position:"fixed", inset:0, backgroundImage:"linear-gradient(rgba(0,229,192,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,192,0.035) 1px,transparent 1px)", backgroundSize:"48px 48px", animation:"gridPulse 5s ease infinite", pointerEvents:"none" }}/>
+
+      {/* Header */}
+      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(0,229,192,0.1)", padding:isMobile ? "0 16px" : "0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 56 : 62, position:"sticky", top:0, zIndex:100 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 16 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:isMobile ? 8 : 7, padding:isMobile ? "10px 14px" : "6px 12px", cursor:"pointer", fontSize:isMobile ? 11 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6, minHeight:isMobile ? 44 : "auto" }}>
+            ← BACK
+          </button>
+          <div style={{ width:isMobile ? 36 : 30, height:isMobile ? 36 : 30, borderRadius:isMobile ? 9 : 7, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 15 }}>✈</div>
+          <div>
+            <div style={{ fontSize:isMobile ? 15 : 13, fontWeight:800, letterSpacing:2 }}>USER PROFILE</div>
+            <div style={{ fontSize:isMobile ? 10 : 9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · ACCOUNT SETTINGS</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "40px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+        <div style={{ maxWidth:700, margin:"0 auto" }}>
+          {/* Profile Card */}
+          <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 20 : 16, padding:isMobile ? 24 : 28, marginBottom:isMobile ? 24 : 20 }}>
+            <div style={{ fontSize:isMobile ? 13 : 11, color:"#555", letterSpacing:2, marginBottom:isMobile ? 20 : 16, fontFamily:"'DM Mono',monospace" }}>ACCOUNT INFORMATION</div>
+            
+            <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+              <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>USERNAME</div>
+              <div style={{ fontSize:isMobile ? 18 : 16, fontWeight:700, color:"#e0e8f0" }}>{currentUser?.name || "N/A"}</div>
+            </div>
+
+            <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+              <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>ROLE</div>
+              <div style={{ fontSize:isMobile ? 14 : 13, color:currentUser?.isAdmin ? "#00e5c0" : "#888" }}>
+                {currentUser?.isAdmin ? "🔐 ADMINISTRATOR" : "👤 OPERATOR"}
+              </div>
+            </div>
+
+            {userInfo && (
+              <>
+                <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+                  <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>ACCOUNT CREATED</div>
+                  <div style={{ fontSize:isMobile ? 12 : 11, color:"#888", fontFamily:"'DM Mono',monospace" }}>
+                    {new Date(userInfo.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+                  </div>
+                </div>
+                {userInfo.updatedAt && userInfo.updatedAt !== userInfo.createdAt && (
+                  <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+                    <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>LAST UPDATED</div>
+                    <div style={{ fontSize:isMobile ? 12 : 11, color:"#888", fontFamily:"'DM Mono',monospace" }}>
+                      {new Date(userInfo.updatedAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'long', year: 'numeric' })}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+
+          {/* Password Change Button */}
+          <button
+            onClick={onChangePassword}
+            style={{
+              width: "100%",
+              background: "rgba(0,229,192,0.1)",
+              border: "1px solid rgba(0,229,192,0.3)",
+              color: "#00e5c0",
+              borderRadius: isMobile ? 16 : 12,
+              padding: isMobile ? "16px 20px" : "14px 18px",
+              cursor: "pointer",
+              fontSize: isMobile ? 13 : 12,
+              fontFamily: "'Outfit',sans-serif",
+              fontWeight: 600,
+              letterSpacing: 1,
+              minHeight: isMobile ? 52 : 48,
+            }}
+          >
+            🔑 CHANGE PASSWORD
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Password Change Page ───────────────────────────────────────────────────────
+function PasswordChangePage({ currentUser, onBack, onSuccess }) {
+  const [oldPw, setOldPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const isMobile = useIsMobile();
+
+  const handleChange = () => {
+    setError("");
+    
+    if (!oldPw || !newPw || !confirmPw) {
+      setError("ALL FIELDS ARE REQUIRED");
+      return;
+    }
+
+    if (newPw.length < 3) {
+      setError("NEW PASSWORD MUST BE AT LEAST 3 CHARACTERS");
+      return;
+    }
+
+    if (newPw !== confirmPw) {
+      setError("NEW PASSWORDS DO NOT MATCH");
+      return;
+    }
+
+    if (oldPw === newPw) {
+      setError("NEW PASSWORD MUST BE DIFFERENT FROM OLD PASSWORD");
+      return;
+    }
+
+    setLoading(true);
+    const success = changeUserPassword(currentUser.name, oldPw, newPw);
+    
+    setTimeout(() => {
+      setLoading(false);
+      if (success) {
+        setSuccess(true);
+        logActivity(currentUser.name, "PASSWORD_CHANGED", {});
+        setTimeout(() => {
+          onSuccess();
+        }, 1500);
+      } else {
+        setError("INCORRECT CURRENT PASSWORD");
+        setOldPw("");
+      }
+    }, 800);
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#070c14", fontFamily:"'Outfit',sans-serif", color:"#e0e8f0", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes gridPulse{0%,100%{opacity:0.03}50%{opacity:0.06}}
+        *{box-sizing:border-box;margin:0;padding:0}
+      `}</style>
+      <div style={{ position:"fixed", inset:0, backgroundImage:"linear-gradient(rgba(0,229,192,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,192,0.035) 1px,transparent 1px)", backgroundSize:"48px 48px", animation:"gridPulse 5s ease infinite", pointerEvents:"none" }}/>
+
+      {/* Header */}
+      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(0,229,192,0.1)", padding:isMobile ? "0 16px" : "0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 56 : 62, position:"sticky", top:0, zIndex:100 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 16 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:isMobile ? 8 : 7, padding:isMobile ? "10px 14px" : "6px 12px", cursor:"pointer", fontSize:isMobile ? 11 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6, minHeight:isMobile ? 44 : "auto" }}>
+            ← BACK
+          </button>
+          <div style={{ width:isMobile ? 36 : 30, height:isMobile ? 36 : 30, borderRadius:isMobile ? 9 : 7, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 15 }}>✈</div>
+          <div>
+            <div style={{ fontSize:isMobile ? 15 : 13, fontWeight:800, letterSpacing:2 }}>CHANGE PASSWORD</div>
+            <div style={{ fontSize:isMobile ? 10 : 9, color:"#00e5c0", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · SECURITY</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "40px 40px 40px", animation:"fadeIn .5s ease", zIndex:1, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ width:"100%", maxWidth:500 }}>
+          {success ? (
+            <div style={{ textAlign:"center", padding:isMobile ? "40px 20px" : "60px 40px" }}>
+              <div style={{ fontSize:isMobile ? 64 : 80, marginBottom:isMobile ? 24 : 32 }}>✅</div>
+              <div style={{ fontSize:isMobile ? 20 : 24, fontWeight:700, color:"#00e5c0", marginBottom:isMobile ? 12 : 16 }}>PASSWORD CHANGED</div>
+              <div style={{ fontSize:isMobile ? 13 : 14, color:"#888" }}>Your password has been successfully updated</div>
+            </div>
+          ) : (
+            <div style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 20 : 16, padding:isMobile ? 24 : 28 }}>
+              <div style={{ fontSize:isMobile ? 13 : 11, color:"#555", letterSpacing:2, marginBottom:isMobile ? 24 : 20, fontFamily:"'DM Mono',monospace" }}>SECURITY · PASSWORD UPDATE</div>
+
+              <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+                <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>CURRENT PASSWORD</div>
+                <input
+                  type="password"
+                  value={oldPw}
+                  onChange={(e) => { setOldPw(e.target.value); setError(""); }}
+                  placeholder="Enter current password"
+                  style={{ width:"100%", padding:isMobile ? "12px 16px" : "11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:isMobile ? 14 : 13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s" }}
+                />
+              </div>
+
+              <div style={{ marginBottom:isMobile ? 20 : 16 }}>
+                <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>NEW PASSWORD</div>
+                <input
+                  type="password"
+                  value={newPw}
+                  onChange={(e) => { setNewPw(e.target.value); setError(""); }}
+                  placeholder="Enter new password"
+                  style={{ width:"100%", padding:isMobile ? "12px 16px" : "11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:isMobile ? 14 : 13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s" }}
+                />
+              </div>
+
+              <div style={{ marginBottom:isMobile ? 24 : 20 }}>
+                <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", letterSpacing:2, marginBottom:isMobile ? 8 : 6, fontFamily:"'DM Mono',monospace" }}>CONFIRM NEW PASSWORD</div>
+                <input
+                  type="password"
+                  value={confirmPw}
+                  onChange={(e) => { setConfirmPw(e.target.value); setError(""); }}
+                  onKeyDown={(e) => e.key === "Enter" && handleChange()}
+                  placeholder="Confirm new password"
+                  style={{ width:"100%", padding:isMobile ? "12px 16px" : "11px 14px", background:"rgba(0,0,0,0.4)", border:`1px solid ${error?"#ff3b5c":"rgba(255,255,255,0.1)"}`, borderRadius:8, fontSize:isMobile ? 14 : 13, color:"#e0e8f0", fontFamily:"'DM Mono',monospace", outline:"none", transition:"border .2s" }}
+                />
+              </div>
+
+              {error && (
+                <div style={{ marginBottom:isMobile ? 20 : 16, padding:"10px 14px", background:"rgba(255,59,92,0.1)", border:"1px solid rgba(255,59,92,0.3)", borderRadius:8 }}>
+                  <div style={{ fontSize:isMobile ? 11 : 10, color:"#ff3b5c", fontFamily:"'DM Mono',monospace" }}>⚠ {error}</div>
+                </div>
+              )}
+
+              <button
+                onClick={handleChange}
+                disabled={loading}
+                style={{
+                  width: "100%",
+                  background: loading ? "rgba(0,229,192,0.1)" : "rgba(0,229,192,0.15)",
+                  border: "1px solid rgba(0,229,192,0.4)",
+                  color: "#00e5c0",
+                  borderRadius: isMobile ? 12 : 10,
+                  padding: isMobile ? "14px" : "13px",
+                  cursor: loading ? "default" : "pointer",
+                  fontSize: isMobile ? 13 : 12,
+                  fontWeight: 700,
+                  letterSpacing: 2,
+                  fontFamily: "'Outfit',sans-serif",
+                  minHeight: isMobile ? 50 : 48,
+                }}
+              >
+                {loading ? "UPDATING..." : "UPDATE PASSWORD →"}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Activity Log Page ────────────────────────────────────────────────────────
+function ActivityLogPage({ onBack }) {
+  const [activities, setActivities] = useState([]);
+  const [filteredActivities, setFilteredActivities] = useState([]);
+  const [searchQuery, setSearchQuery] = useState("");
+  const isMobile = useIsMobile();
+
+  useEffect(() => {
+    const a = getActivityLog();
+    setActivities(a);
+    setFilteredActivities(a);
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) {
+      setFilteredActivities(activities);
+      return;
+    }
+    const query = searchQuery.toLowerCase();
+    const filtered = activities.filter(activity => 
+      activity.userName?.toLowerCase().includes(query) ||
+      activity.action?.toLowerCase().includes(query) ||
+      JSON.stringify(activity.details)?.toLowerCase().includes(query) ||
+      activity.date?.toLowerCase().includes(query) ||
+      activity.time?.toLowerCase().includes(query)
+    );
+    setFilteredActivities(filtered);
+  }, [searchQuery, activities]);
+
+  const formatDateTime = (timestamp) => {
+    const date = new Date(timestamp);
+    return {
+      date: date.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
+      time: date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+    };
+  };
+
+  const getActionIcon = (action) => {
+    const icons = {
+      'USER_LOGIN': '🔓',
+      'ADMIN_LOGIN': '🔐',
+      'USER_REGISTERED': '🆕',
+      'LOGIN_FAILED': '❌',
+      'PASSWORD_CHANGED': '🔑',
+      'EXPORT_LOGIN_HISTORY': '📥',
+      'FLIGHT_SELECTED': '✈️',
+      'DASHBOARD_VIEWED': '📊',
+    };
+    return icons[action] || '📝';
+  };
+
+  const handleExportCSV = () => {
+    const csvData = filteredActivities.map(activity => ({
+      User: activity.userName || '',
+      Action: activity.action || '',
+      Details: JSON.stringify(activity.details || {}),
+      Date: activity.date || '',
+      Time: activity.time || '',
+      Timestamp: activity.timestamp || ''
+    }));
+    exportToCSV(csvData, `activity_log_${new Date().toISOString().split('T')[0]}.csv`);
+    logActivity('ADMIN', 'EXPORT_ACTIVITY_LOG', { count: csvData.length });
+  };
+
+  return (
+    <div style={{ minHeight:"100vh", background:"#070c14", fontFamily:"'Outfit',sans-serif", color:"#e0e8f0", display:"flex", flexDirection:"column" }}>
+      <style>{`
+        @keyframes fadeIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+        @keyframes gridPulse{0%,100%{opacity:0.03}50%{opacity:0.06}}
+        *{box-sizing:border-box;margin:0;padding:0}
+      `}</style>
+      <div style={{ position:"fixed", inset:0, backgroundImage:"linear-gradient(rgba(0,229,192,0.035) 1px,transparent 1px),linear-gradient(90deg,rgba(0,229,192,0.035) 1px,transparent 1px)", backgroundSize:"48px 48px", animation:"gridPulse 5s ease infinite", pointerEvents:"none" }}/>
+
+      {/* Header */}
+      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(118,0,255,0.1)", padding:isMobile ? "0 16px" : "0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 56 : 62, position:"sticky", top:0, zIndex:100 }}>
+        <div style={{ display:"flex", alignItems:"center", gap:isMobile ? 12 : 16 }}>
+          <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:isMobile ? 8 : 7, padding:isMobile ? "10px 14px" : "6px 12px", cursor:"pointer", fontSize:isMobile ? 11 : 10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6, minHeight:isMobile ? 44 : "auto" }}>
+            ← BACK
+          </button>
+          <div style={{ width:isMobile ? 36 : 30, height:isMobile ? 36 : 30, borderRadius:isMobile ? 9 : 7, background:"linear-gradient(135deg,#7600ff,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:isMobile ? 18 : 15 }}>✈</div>
+          <div>
+            <div style={{ fontSize:isMobile ? 15 : 13, fontWeight:800, letterSpacing:2 }}>ACTIVITY LOG</div>
+            <div style={{ fontSize:isMobile ? 10 : 9, color:"#7600ff", letterSpacing:2, fontFamily:"'DM Mono',monospace" }}>AEROSENSE-AI · SYSTEM AUDIT</div>
+          </div>
+        </div>
+      </div>
+
+      {/* Main content */}
+      <div style={{ flex:1, padding:isMobile ? "32px 20px 40px" : "40px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+        <div style={{ marginBottom:isMobile ? 32 : 40, textAlign:"center" }}>
+          <div style={{ fontSize:isMobile ? 13 : 11, color:"#7600ff", letterSpacing:isMobile ? 3 : 4, fontFamily:"'DM Mono',monospace", marginBottom:isMobile ? 16 : 12 }}>SYSTEM ACTIVITY · COMPREHENSIVE AUDIT</div>
+          <div style={{ fontSize:isMobile ? 32 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0" }}>Activity Log</div>
+          <div style={{ fontSize:isMobile ? 13 : 14, color:"#555", marginTop:isMobile ? 12 : 10, fontWeight:400 }}>All user actions and system events</div>
+        </div>
+
+        {/* Search and Export */}
+        <div style={{ maxWidth:900, margin:"0 auto 24px", display:"flex", gap:12, flexWrap:"wrap", alignItems:"center" }}>
+          <div style={{ flex:1, minWidth:isMobile ? "100%" : 200 }}>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by user, action, date..."
+              style={{
+                width: "100%",
+                padding: isMobile ? "12px 16px" : "10px 14px",
+                background: "rgba(0,0,0,0.3)",
+                border: "1px solid rgba(255,255,255,0.1)",
+                borderRadius: 8,
+                fontSize: isMobile ? 13 : 12,
+                color: "#e0e8f0",
+                fontFamily: "'DM Mono',monospace",
+                outline: "none",
+              }}
+            />
+          </div>
+          <button
+            onClick={handleExportCSV}
+            style={{
+              background: "rgba(118,0,255,0.1)",
+              border: "1px solid rgba(118,0,255,0.3)",
+              color: "#7600ff",
+              borderRadius: 8,
+              padding: isMobile ? "12px 18px" : "10px 16px",
+              cursor: "pointer",
+              fontSize: isMobile ? 12 : 11,
+              fontFamily: "'Outfit',sans-serif",
+              fontWeight: 600,
+              letterSpacing: 1,
+              minHeight: isMobile ? 44 : "auto",
+              display: "flex",
+              alignItems: "center",
+              gap: 6,
+            }}
+          >
+            📥 EXPORT CSV
+          </button>
+        </div>
+
+        {filteredActivities.length === 0 ? (
+          <div style={{ textAlign:"center", padding:isMobile ? "60px 20px" : "80px 40px" }}>
+            <div style={{ fontSize:isMobile ? 48 : 64, marginBottom:isMobile ? 20 : 24 }}>📊</div>
+            <div style={{ fontSize:isMobile ? 18 : 20, color:"#666", marginBottom:isMobile ? 12 : 16 }}>
+              {activities.length === 0 ? "No activity logged" : "No results found"}
+            </div>
+            <div style={{ fontSize:isMobile ? 13 : 14, color:"#444" }}>
+              {activities.length === 0 ? "User actions will appear here" : "Try a different search term"}
+            </div>
+          </div>
+        ) : (
+          <div style={{ maxWidth:900, margin:"0 auto", display:"flex", flexDirection:"column", gap:isMobile ? 12 : 10 }}>
+            {searchQuery && (
+              <div style={{ padding: "12px 16px", background: "rgba(118,0,255,0.05)", border: "1px solid rgba(118,0,255,0.15)", borderRadius: 8, fontSize: isMobile ? 12 : 11, color: "#7600ff", fontFamily: "'DM Mono',monospace" }}>
+                Found {filteredActivities.length} of {activities.length} activities
+              </div>
+            )}
+            {filteredActivities.map((activity, i) => {
+              const dt = formatDateTime(activity.timestamp);
+              return (
+                <div key={i} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.07)", borderRadius:isMobile ? 14 : 12, padding:isMobile ? 16 : 14, animation:`fadeIn .3s ease ${i*0.03}s both` }}>
+                  <div style={{ display:"flex", gap:isMobile ? 12 : 10, alignItems:"flex-start" }}>
+                    <div style={{ fontSize:isMobile ? 24 : 20, flexShrink:0 }}>{getActionIcon(activity.action)}</div>
+                    <div style={{ flex:1 }}>
+                      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", flexWrap:"wrap", gap:8, marginBottom:isMobile ? 6 : 4 }}>
+                        <div>
+                          <div style={{ fontSize:isMobile ? 14 : 13, fontWeight:700, color:"#e0e8f0", marginBottom:2 }}>{activity.userName}</div>
+                          <div style={{ fontSize:isMobile ? 11 : 10, color:"#888", fontFamily:"'DM Mono',monospace" }}>{activity.action?.replace(/_/g, ' ')}</div>
+                        </div>
+                        <div style={{ textAlign:"right" }}>
+                          <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", fontFamily:"'DM Mono',monospace" }}>{dt.date}</div>
+                          <div style={{ fontSize:isMobile ? 10 : 9, color:"#666", fontFamily:"'DM Mono',monospace" }}>{dt.time}</div>
+                        </div>
+                      </div>
+                      {activity.details && Object.keys(activity.details).length > 0 && (
+                        <div style={{ marginTop:isMobile ? 8 : 6, padding:"6px 10px", background:"rgba(0,0,0,0.2)", borderRadius:6, fontSize:isMobile ? 10 : 9, color:"#888", fontFamily:"'DM Mono',monospace" }}>
+                          {JSON.stringify(activity.details)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+// ─── Session Timeout Warning Component ─────────────────────────────────────────
+function SessionTimeoutWarning({ onExtend, onLogout }) {
+  const [secondsLeft, setSecondsLeft] = useState(300); // 5 minutes
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setSecondsLeft(prev => {
+        if (prev <= 1) {
+          onLogout();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [onLogout]);
+
+  const minutes = Math.floor(secondsLeft / 60);
+  const seconds = secondsLeft % 60;
+
+  return (
+    <div style={{
+      position: "fixed",
+      inset: 0,
+      background: "rgba(0,0,0,0.85)",
+      backdropFilter: "blur(8px)",
+      zIndex: 10000,
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: "20px",
+    }}>
+      <div style={{
+        background: "rgba(255,255,255,0.05)",
+        border: "2px solid rgba(245,166,35,0.5)",
+        borderRadius: 16,
+        padding: "32px",
+        maxWidth: 500,
+        width: "100%",
+        textAlign: "center",
+      }}>
+        <div style={{ fontSize: 48, marginBottom: 20 }}>⏰</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#f5a623", marginBottom: 12 }}>SESSION TIMEOUT WARNING</div>
+        <div style={{ fontSize: 14, color: "#888", marginBottom: 24 }}>
+          Your session will expire in <strong style={{ color: "#f5a623", fontSize: 18 }}>{minutes}:{seconds.toString().padStart(2, '0')}</strong>
+        </div>
+        <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
+          <button
+            onClick={onExtend}
+            style={{
+              background: "rgba(0,229,192,0.15)",
+              border: "1px solid rgba(0,229,192,0.4)",
+              color: "#00e5c0",
+              borderRadius: 8,
+              padding: "12px 24px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: "'Outfit',sans-serif",
+              minHeight: 44,
+            }}
+          >
+            EXTEND SESSION
+          </button>
+          <button
+            onClick={onLogout}
+            style={{
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.1)",
+              color: "#888",
+              borderRadius: 8,
+              padding: "12px 24px",
+              cursor: "pointer",
+              fontSize: 13,
+              fontWeight: 600,
+              fontFamily: "'Outfit',sans-serif",
+              minHeight: 44,
+            }}
+          >
+            LOGOUT NOW
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── Main App (router) ────────────────────────────────────────────────────────
 export default function AviationAI() {
-  const [page, setPage] = useState("login"); // "login" | "select" | "dashboard" | "history"
+  const [page, setPage] = useState("login"); // "login" | "select" | "dashboard" | "history" | "profile" | "password" | "activity"
   const [activeFlight, setActiveFlight] = useState(null);
   const [currentUser, setCurrentUser] = useState(null);
+  const [showTimeoutWarning, setShowTimeoutWarning] = useState(false);
+  const timeoutRef = useRef(null);
 
   useEffect(() => {
     const user = getCurrentUser();
@@ -1302,6 +2166,69 @@ export default function AviationAI() {
       setCurrentUser(user);
     }
   }, []);
+
+  // Session timeout management
+  useEffect(() => {
+    if (currentUser && page !== "login") {
+      // Clear existing timeout
+      if (timeoutRef.current) {
+        clearSessionTimeout(timeoutRef.current);
+      }
+
+      // Set up session timeout (30 minutes, warning at 25 minutes)
+      const handleLogout = () => {
+        logActivity(currentUser.name, "SESSION_TIMEOUT", {});
+        setCurrentUser(null);
+        localStorage.removeItem("aerosense_current_user");
+        setPage("login");
+        setShowTimeoutWarning(false);
+      };
+
+      const handleWarning = () => {
+        setShowTimeoutWarning(true);
+      };
+
+      // Store warning function globally for timeout system
+      window.showSessionWarning = handleWarning;
+
+      timeoutRef.current = setSessionTimeout(handleLogout, 30);
+
+      // Reset timeout on user activity
+      const resetTimeout = () => {
+        if (timeoutRef.current) {
+          clearSessionTimeout(timeoutRef.current);
+        }
+        setShowTimeoutWarning(false);
+        timeoutRef.current = setSessionTimeout(handleLogout, 30);
+      };
+
+      const events = ['mousedown', 'keydown', 'scroll', 'touchstart'];
+      events.forEach(event => window.addEventListener(event, resetTimeout));
+
+      return () => {
+        events.forEach(event => window.removeEventListener(event, resetTimeout));
+        if (timeoutRef.current) {
+          clearSessionTimeout(timeoutRef.current);
+        }
+        delete window.showSessionWarning;
+      };
+    }
+  }, [currentUser, page]);
+
+  const handleExtendSession = () => {
+    setShowTimeoutWarning(false);
+    // Timeout will reset automatically on next user activity
+  };
+
+  const handleLogout = () => {
+    if (currentUser) {
+      logActivity(currentUser.name, "USER_LOGOUT", {});
+    }
+    setCurrentUser(null);
+    localStorage.removeItem("aerosense_current_user");
+    setPage("login");
+    setShowTimeoutWarning(false);
+  };
 
   return (
     <>
@@ -1319,18 +2246,51 @@ export default function AviationAI() {
           currentUser={currentUser}
           onSelect={(f) => {
             setActiveFlight(f);
+            if (currentUser) {
+              logActivity(currentUser.name, "FLIGHT_SELECTED", { flightId: f.id });
+            }
             setPage("dashboard");
           }}
-          onLogout={() => {
-            setCurrentUser(null);
-            localStorage.removeItem("aerosense_current_user");
-            setPage("login");
-          }}
+          onLogout={handleLogout}
           onViewHistory={() => currentUser?.isAdmin && setPage("history")}
+          onViewProfile={() => setPage("profile")}
+          onViewActivityLog={() => currentUser?.isAdmin && setPage("activity")}
         />
       )}
-      {page === "dashboard" && <Dashboard flight={activeFlight} onBack={() => setPage("select")} />}
+      {page === "dashboard" && (
+        <Dashboard 
+          flight={activeFlight} 
+          onBack={() => {
+            if (currentUser) {
+              logActivity(currentUser.name, "DASHBOARD_CLOSED", {});
+            }
+            setPage("select");
+          }} 
+        />
+      )}
       {page === "history" && <LoginHistoryPage onBack={() => setPage("select")} />}
+      {page === "profile" && (
+        <UserProfilePage
+          currentUser={currentUser}
+          onBack={() => setPage("select")}
+          onChangePassword={() => setPage("password")}
+        />
+      )}
+      {page === "password" && (
+        <PasswordChangePage
+          currentUser={currentUser}
+          onBack={() => setPage("profile")}
+          onSuccess={() => setPage("profile")}
+        />
+      )}
+      {page === "activity" && <ActivityLogPage onBack={() => setPage("select")} />}
+      
+      {showTimeoutWarning && (
+        <SessionTimeoutWarning
+          onExtend={handleExtendSession}
+          onLogout={handleLogout}
+        />
+      )}
     </>
   );
 }
@@ -1344,6 +2304,13 @@ function Dashboard({ flight, onBack }) {
   const [expandedAction, setExpandedAction] = useState(null);
   const [sensorValues, setSensorValues] = useState({});
   const isMobile = useIsMobile();
+  const currentUser = getCurrentUser();
+
+  useEffect(()=>{
+    if (currentUser) {
+      logActivity(currentUser.name, "DASHBOARD_VIEWED", { flightId: flight?.id || "EK205" });
+    }
+  }, []);
 
   useEffect(()=>{
     const iv=setInterval(()=>{
