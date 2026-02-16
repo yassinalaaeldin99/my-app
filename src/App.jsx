@@ -1,6 +1,24 @@
 import { useState, useEffect, useRef } from "react";
 import * as THREE from "three";
 
+// ─── Mobile detection hook ───────────────────────────────────────────────────
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return window.innerWidth < 768;
+  });
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+
+  return isMobile;
+}
+
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 const rand = (min, max, dec = 1) =>
   parseFloat((Math.random() * (max - min) + min).toFixed(dec));
@@ -334,11 +352,15 @@ function AircraftViewer3D({ sensors }) {
     const mount = mountRef.current;
     if (!mount) return;
     const W=mount.clientWidth, H=mount.clientHeight;
+    
+    // Detect mobile device
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent) || window.innerWidth < 768;
+    const pixelRatio = isMobile ? Math.min(window.devicePixelRatio, 1.5) : Math.min(window.devicePixelRatio, 2);
 
     // Renderer
-    const renderer = new THREE.WebGLRenderer({ antialias:true, alpha:true });
+    const renderer = new THREE.WebGLRenderer({ antialias:!isMobile, alpha:true, powerPreference: "high-performance" });
     renderer.setSize(W,H);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+    renderer.setPixelRatio(pixelRatio);
     renderer.setClearColor(0x000000,0);
     mount.appendChild(renderer.domElement);
 
@@ -529,12 +551,23 @@ function AircraftViewer3D({ sensors }) {
       sGroup.add(new THREE.Line(lG, new THREE.LineBasicMaterial({ color:col, transparent:true, opacity:0.35 })));
     });
 
-    // Mouse interaction
+    // Mouse/Touch interaction
     let isDragging=false, dragDist=0, lastX=0, lastY=0, velX=0;
-    const getXY = e=>{ const r=mount.getBoundingClientRect(); return [e.clientX-r.left, e.clientY-r.top]; };
+    const getXY = e=>{ 
+      const r=mount.getBoundingClientRect(); 
+      const clientX = e.touches ? e.touches[0]?.clientX : e.clientX;
+      const clientY = e.touches ? e.touches[0]?.clientY : e.clientY;
+      return [clientX-r.left, clientY-r.top]; 
+    };
 
-    const onDown = e=>{ isDragging=true; dragDist=0; [lastX,lastY]=getXY(e); };
+    const onDown = e=>{ 
+      e.preventDefault();
+      isDragging=true; 
+      dragDist=0; 
+      [lastX,lastY]=getXY(e); 
+    };
     const onMove = e=>{
+      e.preventDefault();
       const [cx,cy]=getXY(e);
       if(isDragging){
         const dx=cx-lastX, dy=cy-lastY;
@@ -544,15 +577,18 @@ function AircraftViewer3D({ sensors }) {
         velX=dx*0.012;
         lastX=cx; lastY=cy;
       }
-      // Hover hit-test
-      const mouse=new THREE.Vector2((cx/W)*2-1,-(cy/H)*2+1);
-      const rc=new THREE.Raycaster();
-      rc.setFromCamera(mouse,camera);
-      const hits=rc.intersectObjects(sensorMeshes);
-      stateRef.current.hoveredId = hits.length>0 ? hits[0].object.userData.sensor.id : null;
-      mount.style.cursor = hits.length>0 ? "pointer" : "grab";
+      // Hover hit-test (only for mouse)
+      if(!e.touches){
+        const mouse=new THREE.Vector2((cx/W)*2-1,-(cy/H)*2+1);
+        const rc=new THREE.Raycaster();
+        rc.setFromCamera(mouse,camera);
+        const hits=rc.intersectObjects(sensorMeshes);
+        stateRef.current.hoveredId = hits.length>0 ? hits[0].object.userData.sensor.id : null;
+        mount.style.cursor = hits.length>0 ? "pointer" : "grab";
+      }
     };
     const onUp = e=>{
+      e.preventDefault();
       if(dragDist<6){
         const [cx,cy]=getXY(e);
         const mouse=new THREE.Vector2((cx/W)*2-1,-(cy/H)*2+1);
@@ -563,9 +599,17 @@ function AircraftViewer3D({ sensors }) {
       }
       isDragging=false;
     };
+    
+    // Mouse events
     mount.addEventListener("mousedown",onDown);
     window.addEventListener("mousemove",onMove);
     window.addEventListener("mouseup",onUp);
+    
+    // Touch events
+    mount.addEventListener("touchstart",onDown, { passive: false });
+    mount.addEventListener("touchmove",onMove, { passive: false });
+    mount.addEventListener("touchend",onUp, { passive: false });
+    mount.addEventListener("touchcancel",onUp, { passive: false });
 
     // Animation loop
     let rafId, t=0;
@@ -598,6 +642,10 @@ function AircraftViewer3D({ sensors }) {
       mount.removeEventListener("mousedown",onDown);
       window.removeEventListener("mousemove",onMove);
       window.removeEventListener("mouseup",onUp);
+      mount.removeEventListener("touchstart",onDown);
+      mount.removeEventListener("touchmove",onMove);
+      mount.removeEventListener("touchend",onUp);
+      mount.removeEventListener("touchcancel",onUp);
       window.removeEventListener("resize",onResize);
       if(mount.contains(renderer.domElement)) mount.removeChild(renderer.domElement);
       renderer.dispose();
@@ -608,9 +656,10 @@ function AircraftViewer3D({ sensors }) {
   useEffect(()=>{ stateRef.current.selectedId = selected?.id; },[selected]);
 
   const subsystems = [...new Set(SENSORS_3D.map(s=>s.subsystem))];
-
+  const isMobile = useIsMobile();
+  
   return (
-    <div style={{ display:"grid", gridTemplateColumns:"1fr 340px", gap:16 }}>
+    <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 340px", gap:16 }}>
       {/* Canvas */}
       <div style={{ position:"relative" }}>
         {/* Legend */}
@@ -644,7 +693,7 @@ function AircraftViewer3D({ sensors }) {
           })}
         </div>
         <div ref={mountRef}
-          style={{ width:"100%", height:600, borderRadius:12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab" }}
+          style={{ width:"100%", height:isMobile ? 400 : 600, borderRadius:12, overflow:"hidden", background:"radial-gradient(ellipse at 40% 30%, #0b1d30 0%, #030a14 65%)", border:"1px solid rgba(255,255,255,0.06)", cursor:"grab", touchAction:"none" }}
         />
       </div>
 
@@ -848,6 +897,7 @@ const FLIGHT_DETAILS = [
 function FlightSelectPage({ onSelect, onLogout }) {
   const [hovered, setHovered] = useState(null);
   const [time, setTime] = useState(new Date());
+  const isMobile = useIsMobile();
   useEffect(()=>{ const iv=setInterval(()=>setTime(new Date()),1000); return ()=>clearInterval(iv); },[]);
 
   const nowStr = time.toLocaleTimeString("en-GB",{ hour:"2-digit", minute:"2-digit", second:"2-digit" })+" UTC";
@@ -866,7 +916,7 @@ function FlightSelectPage({ onSelect, onLogout }) {
       <div style={{ position:"fixed", inset:0, background:"radial-gradient(ellipse at 50% 0%,rgba(0,118,255,0.06) 0%,transparent 60%)", pointerEvents:"none" }}/>
 
       {/* Header */}
-      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(0,229,192,0.1)", padding:"0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:62, position:"sticky", top:0, zIndex:100 }}>
+      <div style={{ background:"rgba(0,0,0,0.55)", backdropFilter:"blur(16px)", borderBottom:"1px solid rgba(0,229,192,0.1)", padding:isMobile ? "0 16px" : "0 40px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 56 : 62, position:"sticky", top:0, zIndex:100, flexWrap:"wrap" }}>
         <div style={{ display:"flex", alignItems:"center", gap:14 }}>
           <div style={{ width:34, height:34, borderRadius:9, background:"linear-gradient(135deg,#00e5c0,#0076ff)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, boxShadow:"0 0 20px rgba(0,229,192,0.2)" }}>✈</div>
           <div>
@@ -889,14 +939,14 @@ function FlightSelectPage({ onSelect, onLogout }) {
       </div>
 
       {/* Main content */}
-      <div style={{ flex:1, padding:"52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
+      <div style={{ flex:1, padding:isMobile ? "24px 16px 40px" : "52px 40px 40px", animation:"fadeIn .5s ease", zIndex:1 }}>
         <div style={{ marginBottom:48, textAlign:"center" }}>
           <div style={{ fontSize:10, color:"#00e5c0", letterSpacing:4, fontFamily:"'DM Mono',monospace", marginBottom:12 }}>SELECT FLIGHT · OPERATIONAL DASHBOARD</div>
-          <div style={{ fontSize:36, fontWeight:800, letterSpacing:2, color:"#e0e8f0" }}>Active Fleet Monitor</div>
-          <div style={{ fontSize:14, color:"#555", marginTop:10, fontWeight:400 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
+          <div style={{ fontSize:isMobile ? 28 : 36, fontWeight:800, letterSpacing:2, color:"#e0e8f0" }}>Active Fleet Monitor</div>
+          <div style={{ fontSize:isMobile ? 12 : 14, color:"#555", marginTop:10, fontWeight:400 }}>Choose a flight to open its full sensor dashboard, 3D map and analytics</div>
         </div>
 
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:20, maxWidth:1040, margin:"0 auto" }}>
+        <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "repeat(2,1fr)", gap:20, maxWidth:1040, margin:"0 auto" }}>
           {FLIGHT_DETAILS.map((f,i)=>{
             const rc = RISK_COLOR(f.risk);
             const isHov = hovered===f.id;
@@ -989,7 +1039,7 @@ function FlightSelectPage({ onSelect, onLogout }) {
         </div>
 
         {/* Fleet summary row */}
-        <div style={{ maxWidth:1040, margin:"32px auto 0", display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14 }}>
+        <div style={{ maxWidth:1040, margin:"32px auto 0", display:"grid", gridTemplateColumns:isMobile ? "repeat(2,1fr)" : "repeat(4,1fr)", gap:14 }}>
           {[{l:"ACTIVE FLIGHTS",v:"2",c:"#00e5c0"},{l:"BOARDING",v:"1",c:"#f5a623"},{l:"COMPLETED TODAY",v:"1",c:"#555"},{l:"FLEET RISK AVG",v:"18",c:"#00e5c0"}].map(({l,v,c})=>(
             <div key={l} style={{ background:"rgba(255,255,255,0.02)", border:"1px solid rgba(255,255,255,0.05)", borderRadius:10, padding:"16px 20px", textAlign:"center" }}>
               <div style={{ fontSize:28, fontWeight:800, color:c }}>{v}</div>
@@ -1023,6 +1073,7 @@ function Dashboard({ flight, onBack }) {
   const [subsystems, setSubsystems] = useState(fd.subsystems);
   const [expandedAction, setExpandedAction] = useState(null);
   const [sensorValues, setSensorValues] = useState({});
+  const isMobile = useIsMobile();
 
   useEffect(()=>{
     const iv=setInterval(()=>{
@@ -1058,7 +1109,7 @@ function Dashboard({ flight, onBack }) {
       <div style={{ position:"fixed", inset:0, background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.02) 2px,rgba(0,0,0,0.02) 4px)", pointerEvents:"none", zIndex:9999 }}/>
 
       {/* Header */}
-      <div style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", borderBottom:"1px solid rgba(0,229,192,0.12)", padding:"0 28px", display:"flex", alignItems:"center", justifyContent:"space-between", height:58, position:"sticky", top:0, zIndex:100 }}>
+      <div style={{ background:"rgba(0,0,0,0.6)", backdropFilter:"blur(12px)", borderBottom:"1px solid rgba(0,229,192,0.12)", padding:isMobile ? "0 12px" : "0 28px", display:"flex", alignItems:"center", justifyContent:"space-between", height:isMobile ? 50 : 58, position:"sticky", top:0, zIndex:100, flexWrap:"wrap", gap:8 }}>
         <div style={{ display:"flex", alignItems:"center", gap:16 }}>
           <button onClick={onBack} style={{ background:"rgba(255,255,255,0.04)", border:"1px solid rgba(255,255,255,0.1)", color:"#888", borderRadius:7, padding:"6px 12px", cursor:"pointer", fontSize:10, fontFamily:"'Outfit',sans-serif", letterSpacing:1, display:"flex", alignItems:"center", gap:6 }}>
             ← FLIGHTS
@@ -1101,7 +1152,7 @@ function Dashboard({ flight, onBack }) {
       </div>
 
       {/* Nav */}
-      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:"0 28px", background:"rgba(0,0,0,0.3)" }}>
+      <div style={{ display:"flex", borderBottom:"1px solid rgba(255,255,255,0.06)", padding:isMobile ? "0 12px" : "0 28px", background:"rgba(0,0,0,0.3)", overflowX:"auto", WebkitOverflowScrolling:"touch", scrollbarWidth:"none", msOverflowStyle:"none" }}>
         {tabs.map(t=>(
           <button key={t.id} className="tab-btn" onClick={()=>setTab(t.id)}
             style={{ padding:"14px 20px", fontSize:10, letterSpacing:2.5, color:tab===t.id?"#00e5c0":"#555", borderBottom:tab===t.id?"2px solid #00e5c0":"2px solid transparent", fontWeight:tab===t.id?700:400, position:"relative" }}>
@@ -1111,12 +1162,12 @@ function Dashboard({ flight, onBack }) {
         ))}
       </div>
 
-      <div style={{ padding:"24px 28px", animation:"fadeIn .3s ease", paddingBottom:60 }}>
+      <div style={{ padding:isMobile ? "16px 12px" : "24px 28px", animation:"fadeIn .3s ease", paddingBottom:60 }}>
 
         {tab==="sensor3d"&&<AircraftViewer3D sensors={fd.sensors3d}/>}
 
         {tab==="ops"&&(
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:16 }}>
+          <div style={{ display:"grid", gridTemplateColumns:isMobile ? "1fr" : "1fr 1fr 1fr", gap:16 }}>
             <div style={{ gridColumn:"1/-1", display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
               {/* Current flight overview + subsystem risk breakdown */}
               <div style={{ background:"rgba(255,255,255,0.02)", border:`1px solid ${RISK_COLOR(flight.risk)}30`, borderRadius:10, padding:"14px 16px" }}>
